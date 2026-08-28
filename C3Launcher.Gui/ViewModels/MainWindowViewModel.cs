@@ -1,0 +1,787 @@
+using Avalonia.Controls;
+using Avalonia.Threading;
+using C3Launcher.Core.Auth;
+using C3Launcher.Core.Docker;
+using C3Launcher.Core.Launching;
+using C3Launcher.Core.Mounting;
+using C3Launcher.Core.Projects;
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
+using System.Collections.ObjectModel;
+using System.Diagnostics;
+
+namespace C3Launcher.Gui.ViewModels;
+
+public sealed record ModelChoice(string Label, string? Value);
+
+public partial class MainWindowViewModel : ViewModelBase, IDisposable
+{
+    private readonly ProjectStore _store = new();
+    private readonly SessionLauncher _launcher = new();
+    private readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(20) };
+    private readonly Dictionary<string, LaunchedSession> _liveSessions = [];
+    private readonly List<ProjectItemViewModel> _allProjects = [];
+    private readonly DispatcherTimer _timer;
+
+    private LauncherSettings _settings = new();
+    private DockerConnection? _docker;
+    private SessionService? _sessionService;
+    private ImageBuildService? _imageService;
+    private ClaudeUpdateService? _updateService;
+    private DockerEventMonitor? _events;
+    private CancellationTokenSource? _scanCts;
+    private MountScanResult? _scan;
+    private int _statsTick;
+    private bool _suppressOptionWrites;
+
+    public MainWindowViewModel()
+    {
+        _timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+        _timer.Tick += OnTimerTick;
+
+        ModelChoices =
+        [
+            new ModelChoice("Default (account setting)", null),
+            new ModelChoice("Opus 5", "opus"),
+            new ModelChoice("Sonnet 5", "sonnet"),
+            new ModelChoice("Haiku 4.5", "haiku"),
+        ];
+        SelectedModel = ModelChoices[0];
+
+        if (Design.IsDesignMode)
+        {
+            SeedDesignData();
+            return;
+        }
+
+        LoadProjects();
+    }
+
+    // Supplied by the view: these need a Window for dialogs and the storage picker.
+    public Func<Task<string?>>? PickFolderAsync { get; set; }
+    public Func<MountScanResult, string, Task>? ShowMountPreviewAsync { get; set; }
+    public Func<SessionItemViewModel, SessionService, Task>? ShowSessionDetailAsync { get; set; }
+    public Func<ImageBuildService, string, string?, Task<bool>>? ShowBuildWindowAsync { get; set; }
+
+    public ObservableCollection<ProjectItemViewModel> Projects { get; } = [];
+
+    public ObservableCollection<SessionItemViewModel> Sessions { get; } = [];
+
+    public IReadOnlyList<ModelChoice> ModelChoices { get; }
+
+    [ObservableProperty]
+    public partial string AccountEmail { get; set; } = "not signed in";
+
+    [ObservableProperty]
+    public partial string AccountOrg { get; set; } = string.Empty;
+
+    [ObservableProperty]
+    public partial string? AuthError { get; set; }
+
+    [ObservableProperty]
+    public partial string ImageName { get; set; } = ContainerAssets.ImageName;
+
+    [ObservableProperty]
+    public partial string ImageVersion { get; set; } = "—";
+
+    [ObservableProperty]
+    public partial string UpdateText { get; set; } = "checking…";
+
+    [ObservableProperty]
+    public partial bool UpdateAvailable { get; set; }
+
+    [ObservableProperty]
+    public partial string? PendingClaudeVersion { get; set; }
+
+    [ObservableProperty]
+    public partial string? DockerError { get; set; }
+
+    [ObservableProperty]
+    public partial string FilterText { get; set; } = string.Empty;
+
+    [ObservableProperty]
+    public partial ProjectItemViewModel? SelectedProject { get; set; }
+
+    [ObservableProperty]
+    public partial bool SessionsExpanded { get; set; }
+
+    [ObservableProperty]
+    public partial string? StatusText { get; set; }
+
+    [ObservableProperty]
+    public partial bool IsBusy { get; set; }
+
+    [ObservableProperty]
+    public partial string MountSummary { get; set; } = "not scanned";
+
+    [ObservableProperty]
+    public partial int BuildCriticalCount { get; set; }
+
+    [ObservableProperty]
+    public partial ModelChoice SelectedModel { get; set; }
+
+    [ObservableProperty]
+    public partial string ExtraArgs { get; set; } = string.Empty;
+
+    [ObservableProperty]
+    public partial bool SkipUpdateCheck { get; set; }
+
+    public bool HasSelection => SelectedProject is not null;
+
+    public bool HasBuildCritical => BuildCriticalCount > 0;
+
+    public bool HasSessions => Sessions.Count > 0;
+
+    public string SessionsSummary => Sessions.Count switch
+    {
+        0 => "No active sessions",
+        1 => "1 active session",
+        var n => $"{n} active sessions",
+    };
+
+    public string SessionsTotals
+    {
+        get
+        {
+            if (Sessions.Count == 0)
+                return string.Empty;
+
+            var memory = Sessions.Aggregate(0UL, (sum, s) => sum + s.MemoryBytes);
+            var cpu = Sessions.Sum(s => s.CpuPercent);
+            return $"{SessionItemViewModel.FormatBytes(memory)} · {cpu:0.0}%";
+        }
+    }
+
+    public async Task InitializeAsync()
+    {
+        ReadAuth();
+
+        try
+        {
+            _docker = DockerConnection.Create(
+                string.IsNullOrWhiteSpace(_settings.DockerEndpoint) ? null : new Uri(_settings.DockerEndpoint));
+        }
+        catch (Exception ex)
+        {
+            DockerError = $"Could not create a Docker client: {ex.Message}";
+            return;
+        }
+
+        DockerError = await _docker.ProbeAsync();
+        if (DockerError is not null)
+        {
+            UpdateText = "Docker unavailable";
+            return;
+        }
+
+        _sessionService = new SessionService(_docker.Client);
+        _imageService = new ImageBuildService(_docker.Client);
+        _updateService = new ClaudeUpdateService(_docker.Client, new NpmRegistryClient(_http));
+
+        _events = new DockerEventMonitor(_docker.Client);
+        _events.Start();
+        _ = Task.Run(ConsumeEventsAsync);
+
+        _timer.Start();
+
+        await RefreshSessionsAsync();
+
+        // Anything on disk that isn't backing a live container is a leftover from
+        // a previous run that was closed or killed before its container died.
+        SessionWorkspace.Sweep(Sessions.Select(s => s.Info.SessionId));
+
+        await CheckForUpdatesAsync();
+    }
+
+    private void ReadAuth()
+    {
+        var auth = ClaudeAuthReader.Read();
+        if (!auth.Ok)
+        {
+            AuthError = auth.Error;
+            AccountEmail = "not signed in";
+            AccountOrg = string.Empty;
+            return;
+        }
+
+        AuthError = null;
+        AccountEmail = auth.Auth!.Email;
+        AccountOrg = auth.Auth.OrganizationName ?? DomainOf(auth.Auth.Email);
+    }
+
+    private static string DomainOf(string email)
+    {
+        var at = email.IndexOf('@');
+        return at >= 0 && at < email.Length - 1 ? email[(at + 1)..] : string.Empty;
+    }
+
+    private void LoadProjects()
+    {
+        _settings = _store.Load();
+        _allProjects.Clear();
+
+        foreach (var entry in _settings.Projects)
+            _allProjects.Add(new ProjectItemViewModel(entry));
+
+        ApplyFilter();
+        SelectedProject = Projects.FirstOrDefault();
+    }
+
+    private void ApplyFilter()
+    {
+        var filter = FilterText.Trim();
+        var previous = SelectedProject;
+
+        Projects.Clear();
+
+        foreach (var project in _allProjects
+            .Where(p => p.Matches(filter))
+            .OrderByDescending(p => p.Pinned)
+            .ThenBy(p => p.PinSlot ?? int.MaxValue)
+            .ThenByDescending(p => p.Entry.LastOpenedUtc ?? DateTime.MinValue))
+        {
+            Projects.Add(project);
+        }
+
+        if (previous is not null && Projects.Contains(previous))
+            SelectedProject = previous;
+        else
+            SelectedProject = Projects.FirstOrDefault();
+    }
+
+    partial void OnFilterTextChanged(string value) => ApplyFilter();
+
+    partial void OnBuildCriticalCountChanged(int value) => OnPropertyChanged(nameof(HasBuildCritical));
+
+    partial void OnSelectedProjectChanged(ProjectItemViewModel? value)
+    {
+        OnPropertyChanged(nameof(HasSelection));
+
+        _suppressOptionWrites = true;
+        SelectedModel = ModelChoices.FirstOrDefault(m => m.Value == value?.Entry.Model) ?? ModelChoices[0];
+        ExtraArgs = value?.Entry.ExtraArgs ?? string.Empty;
+        SkipUpdateCheck = value?.Entry.SkipUpdateCheck ?? false;
+        _suppressOptionWrites = false;
+
+        if (Design.IsDesignMode)
+            return;
+
+        _scan = null;
+        MountSummary = "not scanned";
+        BuildCriticalCount = 0;
+
+        if (value is not null)
+            _ = ScanMountsAsync(value);
+    }
+
+    partial void OnSelectedModelChanged(ModelChoice value) => WriteOption(e => e.Model = value.Value);
+
+    partial void OnExtraArgsChanged(string value) => WriteOption(e => e.ExtraArgs = value);
+
+    partial void OnSkipUpdateCheckChanged(bool value) => WriteOption(e => e.SkipUpdateCheck = value);
+
+    private void WriteOption(Action<ProjectEntry> apply)
+    {
+        if (_suppressOptionWrites || SelectedProject is null)
+            return;
+
+        apply(SelectedProject.Entry);
+        Save();
+    }
+
+    private void Save()
+    {
+        try
+        {
+            _store.Save(_settings);
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"Could not save settings: {ex.Message}";
+        }
+    }
+
+    private async Task ScanMountsAsync(ProjectItemViewModel project)
+    {
+        _scanCts?.Cancel();
+        _scanCts?.Dispose();
+        _scanCts = new CancellationTokenSource();
+        var token = _scanCts.Token;
+
+        MountSummary = "scanning…";
+
+        try
+        {
+            var patterns = MountIgnorePattern.ParseFile(
+                project.Entry.MountIgnorePath ?? ContainerAssets.DefaultMountIgnorePath);
+
+            var scanner = new MountIgnoreScanner();
+            var result = await Task.Run(() => scanner.Scan(project.Entry.Path, patterns, null, token), token);
+
+            if (token.IsCancellationRequested || SelectedProject != project)
+                return;
+
+            _scan = result;
+            MountSummary = result.MatchCount switch
+            {
+                0 => "nothing hidden",
+                1 => "1 item hidden",
+                var n => $"{n} items hidden",
+            };
+            BuildCriticalCount = result.BuildCriticalWarnings
+                .Select(w => w.RelativePath)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Count();
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            MountSummary = $"scan failed: {ex.Message}";
+        }
+    }
+
+    private async Task CheckForUpdatesAsync()
+    {
+        if (_updateService is null || _imageService is null)
+            return;
+
+        if (!await _imageService.ImageExistsAsync(ImageName))
+        {
+            ImageVersion = "not built";
+            UpdateText = "image not built yet";
+            UpdateAvailable = false;
+            return;
+        }
+
+        if (!_settings.CheckForUpdates)
+        {
+            ImageVersion = await _updateService.GetInstalledVersionAsync(ImageName) is { } v ? $"v{v}" : "—";
+            UpdateText = "update check disabled";
+            return;
+        }
+
+        UpdateText = "checking for updates…";
+
+        var status = await _updateService.CheckAsync(ImageName, TimeSpan.FromDays(_settings.UpdateSoakDays));
+
+        ImageVersion = status.InstalledVersion is { } installed ? $"v{installed}" : "—";
+
+        if (status.Error is { } error)
+        {
+            UpdateText = error;
+            UpdateAvailable = false;
+            return;
+        }
+
+        if (status.UpdateAvailable && status.Latest is { } latest)
+        {
+            UpdateAvailable = true;
+            PendingClaudeVersion = latest.Version.ToString();
+            UpdateText = $"v{latest.Version} available";
+        }
+        else
+        {
+            UpdateAvailable = false;
+            PendingClaudeVersion = null;
+            UpdateText = "up to date";
+        }
+    }
+
+    private async Task ConsumeEventsAsync()
+    {
+        if (_events is null)
+            return;
+
+        await foreach (var message in _events.Events)
+        {
+            var action = message.Action;
+            var labels = message.Actor?.Attributes;
+
+            if (action is "die" or "destroy" or "stop")
+            {
+                if (labels is not null
+                    && labels.TryGetValue(SessionLabels.SessionId, out var sessionId)
+                    && _liveSessions.Remove(sessionId, out var session))
+                {
+                    session.Dispose();
+                }
+            }
+
+            await Dispatcher.UIThread.InvokeAsync(RefreshSessionsAsync);
+        }
+    }
+
+    private async Task RefreshSessionsAsync()
+    {
+        if (_sessionService is null)
+            return;
+
+        IReadOnlyList<SessionInfo> current;
+        try
+        {
+            current = await _sessionService.ListAsync();
+        }
+        catch
+        {
+            return;
+        }
+
+        var running = current.Where(s => s.State is "running").ToList();
+
+        for (var i = Sessions.Count - 1; i >= 0; i--)
+        {
+            if (running.All(s => s.ContainerId != Sessions[i].ContainerId))
+                Sessions.RemoveAt(i);
+        }
+
+        foreach (var info in running)
+        {
+            var existing = Sessions.FirstOrDefault(s => s.ContainerId == info.ContainerId);
+            if (existing is null)
+                Sessions.Add(new SessionItemViewModel(info));
+            else
+                existing.Update(info);
+        }
+
+        foreach (var project in _allProjects)
+        {
+            project.IsRunning = running.Any(s =>
+                string.Equals(s.ProjectPath, project.Entry.Path, StringComparison.OrdinalIgnoreCase));
+        }
+
+        OnPropertyChanged(nameof(HasSessions));
+        OnPropertyChanged(nameof(SessionsSummary));
+        OnPropertyChanged(nameof(SessionsTotals));
+
+        if (Sessions.Count > 0 && !SessionsExpanded && running.Count > 0)
+            SessionsExpanded = true;
+    }
+
+    private void OnTimerTick(object? sender, EventArgs e)
+    {
+        foreach (var session in Sessions)
+            session.Tick();
+
+        if (++_statsTick % 3 == 0)
+            _ = SampleAllAsync();
+    }
+
+    private async Task SampleAllAsync()
+    {
+        if (_sessionService is null)
+            return;
+
+        foreach (var session in Sessions.ToList())
+        {
+            try
+            {
+                if (await _sessionService.SampleAsync(session.ContainerId) is { } sample)
+                    session.Apply(sample);
+            }
+            catch
+            {
+                // A container that exited mid-sample is picked up by the next refresh.
+            }
+        }
+
+        OnPropertyChanged(nameof(SessionsTotals));
+    }
+
+    [RelayCommand]
+    private async Task LaunchAsync()
+    {
+        if (SelectedProject is not { } project)
+            return;
+
+        if (AuthError is not null)
+        {
+            StatusText = AuthError;
+            return;
+        }
+
+        IsBusy = true;
+        StatusText = "Building image…";
+
+        try
+        {
+            if (_imageService is not null && ShowBuildWindowAsync is not null)
+            {
+                var version = SkipUpdateCheck ? null : PendingClaudeVersion;
+                if (!await ShowBuildWindowAsync(_imageService, ImageName, version))
+                {
+                    StatusText = "Build failed — session not started.";
+                    return;
+                }
+
+                PendingClaudeVersion = null;
+                await CheckForUpdatesAsync();
+            }
+
+            StatusText = "Starting session…";
+
+            var outcome = await _launcher.LaunchAsync(new LaunchOptions
+            {
+                ProjectPath = project.Entry.Path,
+                ProjectName = project.Entry.Name,
+                Model = SelectedModel.Value,
+                ExtraArgs = SplitArgs(ExtraArgs),
+                Image = ImageName,
+                MountIgnorePath = project.Entry.MountIgnorePath,
+            });
+
+            if (!outcome.Ok)
+            {
+                StatusText = outcome.Error;
+                return;
+            }
+
+            _liveSessions[outcome.Session!.SessionId] = outcome.Session;
+            ProjectStore.RecordLaunch(project.Entry);
+            project.Refresh();
+            Save();
+            StatusText = null;
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    public static IReadOnlyList<string> SplitArgs(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+            return [];
+
+        var args = new List<string>();
+        var current = new System.Text.StringBuilder();
+        var quoted = false;
+
+        foreach (var c in raw)
+        {
+            if (c == '"')
+            {
+                quoted = !quoted;
+            }
+            else if (char.IsWhiteSpace(c) && !quoted)
+            {
+                if (current.Length > 0)
+                {
+                    args.Add(current.ToString());
+                    current.Clear();
+                }
+            }
+            else
+            {
+                current.Append(c);
+            }
+        }
+
+        if (current.Length > 0)
+            args.Add(current.ToString());
+
+        return args;
+    }
+
+    [RelayCommand]
+    private void OpenFolder()
+    {
+        if (SelectedProject is not { } project)
+            return;
+
+        try
+        {
+            Process.Start(new ProcessStartInfo(project.Entry.Path) { UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"Could not open the folder: {ex.Message}";
+        }
+    }
+
+    [RelayCommand]
+    private async Task AddProjectAsync()
+    {
+        if (PickFolderAsync is null)
+            return;
+
+        var picked = await PickFolderAsync();
+        if (picked is null)
+            return;
+
+        if (!Core.Launching.ProjectPath.TryResolve(picked, out var full, out var error))
+        {
+            StatusText = error;
+            return;
+        }
+
+        var existing = _allProjects.FirstOrDefault(p =>
+            string.Equals(p.Entry.Path, full, StringComparison.OrdinalIgnoreCase));
+
+        if (existing is not null)
+        {
+            SelectedProject = existing;
+            return;
+        }
+
+        var entry = ProjectStore.CreateEntry(full);
+        _settings.Projects.Add(entry);
+
+        var item = new ProjectItemViewModel(entry);
+        _allProjects.Add(item);
+        Save();
+        ApplyFilter();
+        SelectedProject = item;
+    }
+
+    [RelayCommand]
+    private void RemoveProject(ProjectItemViewModel? project)
+    {
+        project ??= SelectedProject;
+        if (project is null)
+            return;
+
+        _settings.Projects.Remove(project.Entry);
+        _allProjects.Remove(project);
+        Save();
+        ApplyFilter();
+    }
+
+    [RelayCommand]
+    private void TogglePin(ProjectItemViewModel? project)
+    {
+        project ??= SelectedProject;
+        if (project is null)
+            return;
+
+        if (project.Entry.Pinned)
+        {
+            project.Entry.Pinned = false;
+            project.Entry.PinSlot = null;
+        }
+        else
+        {
+            var used = _allProjects.Where(p => p.Entry.Pinned).Select(p => p.Entry.PinSlot).ToHashSet();
+            var slot = Enumerable.Range(1, 9).FirstOrDefault(n => !used.Contains(n));
+
+            project.Entry.Pinned = true;
+            project.Entry.PinSlot = slot == 0 ? null : slot;
+        }
+
+        project.Refresh();
+        Save();
+        ApplyFilter();
+    }
+
+    public void LaunchPinned(int slot)
+    {
+        var project = _allProjects.FirstOrDefault(p => p.Entry.PinSlot == slot);
+        if (project is null)
+            return;
+
+        SelectedProject = project;
+        _ = LaunchAsync();
+    }
+
+    [RelayCommand]
+    private async Task RebuildAsync()
+    {
+        if (_imageService is null || ShowBuildWindowAsync is null)
+            return;
+
+        if (await ShowBuildWindowAsync(_imageService, ImageName, PendingClaudeVersion))
+        {
+            PendingClaudeVersion = null;
+            await CheckForUpdatesAsync();
+        }
+    }
+
+    [RelayCommand]
+    private async Task PreviewMountsAsync()
+    {
+        if (_scan is null || ShowMountPreviewAsync is null || SelectedProject is null)
+            return;
+
+        var path = SelectedProject.Entry.MountIgnorePath ?? ContainerAssets.DefaultMountIgnorePath;
+        await ShowMountPreviewAsync(_scan, path);
+    }
+
+    [RelayCommand]
+    private void ToggleSessions() => SessionsExpanded = !SessionsExpanded;
+
+    [RelayCommand]
+    private async Task StopSessionAsync(SessionItemViewModel? session)
+    {
+        if (session is null || _sessionService is null)
+            return;
+
+        try
+        {
+            await _sessionService.StopAsync(session.ContainerId);
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"Could not stop the session: {ex.Message}";
+        }
+    }
+
+    [RelayCommand]
+    private async Task ShowSessionAsync(SessionItemViewModel? session)
+    {
+        if (session is null || _sessionService is null || ShowSessionDetailAsync is null)
+            return;
+
+        await ShowSessionDetailAsync(session, _sessionService);
+    }
+
+    private void SeedDesignData()
+    {
+        AccountEmail = "matthew.wilcox@ldi.la.gov";
+        AccountOrg = "ldi.la.gov";
+        ImageVersion = "v2.0.14";
+        UpdateText = "up to date";
+        MountSummary = "142 items hidden";
+        BuildCriticalCount = 3;
+
+        foreach (var (name, path, pinned, slot) in new[]
+        {
+            ("C3Launcher", @"C:\Projects\C3Launcher", true, 1),
+            ("claude-container", @"C:\Projects\claude-container", true, 2),
+            ("rate-filing-api", @"C:\work\rate-filing-api", false, 0),
+        })
+        {
+            var entry = new ProjectEntry
+            {
+                Name = name,
+                Path = path,
+                Pinned = pinned,
+                PinSlot = slot == 0 ? null : slot,
+            };
+
+            _allProjects.Add(new ProjectItemViewModel(entry));
+        }
+
+        ApplyFilter();
+    }
+
+    public void Dispose()
+    {
+        _timer.Stop();
+        _timer.Tick -= OnTimerTick;
+
+        _scanCts?.Cancel();
+        _scanCts?.Dispose();
+
+        // Deliberately not disposed: their containers may still be running, and the
+        // files are bind-mount sources. The sweep on next start collects them.
+        _liveSessions.Clear();
+
+        // Not awaited: the event pump marshals to the UI thread, so blocking here
+        // while it is mid-dispatch would deadlock on shutdown.
+        _ = _events?.DisposeAsync().AsTask();
+
+        _docker?.Dispose();
+        _http.Dispose();
+    }
+}

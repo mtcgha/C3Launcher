@@ -1,0 +1,12 @@
+* text=auto
+
+# entrypoint.sh MUST stay LF. It is COPYed into the image and run by /bin/sh;
+# with CRLF the shebang becomes "#!/bin/sh\r" and the container dies with a
+# misleading "no such file or directory".
+*.sh text eol=lf
+C3Launcher.Core/Container/entrypoint.sh text eol=lf
+C3Launcher.Core/Container/Dockerfile text eol=lf
+C3Launcher.Core/Container/.mountignore text eol=lf
+
+*.ico binary
+*.png binary

@@ -1,0 +1,73 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:C3Launcher.Gui.ViewModels"
+        xmlns:conv="using:Avalonia.Data.Converters"
+        xmlns:sys="using:System"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="520"
+        x:Class="C3Launcher.Gui.Views.BuildProgressWindow"
+        x:DataType="vm:BuildProgressViewModel"
+        Icon="/Assets/c3launcher.ico"
+        Title="Building image"
+        Width="800" Height="520" MinWidth="640" MinHeight="400"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource AppBackground}"
+        FontFamily="{DynamicResource UiFont}">
+
+  <Grid RowDefinitions="64,*,52">
+
+    <Border Grid.Row="0" BorderBrush="{DynamicResource BorderNormal}" BorderThickness="0,0,0,1">
+      <StackPanel Spacing="9" VerticalAlignment="Center" Margin="18,0">
+        <Grid ColumnDefinitions="Auto,*,Auto">
+          <TextBlock Grid.Column="0" Text="{Binding Headline}" FontSize="12.5" Margin="0,0,10,0" />
+          <TextBlock Grid.Column="1" Text="{Binding CurrentStep}" Classes="mono dim" FontSize="11.5"
+                     VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+          <TextBlock Grid.Column="2" Text="{Binding Elapsed}" Classes="mono faint" FontSize="11"
+                     VerticalAlignment="Center" />
+        </Grid>
+
+        <ProgressBar Height="4" CornerRadius="2" IsIndeterminate="{Binding IsRunning}"
+                     Minimum="0" Maximum="1" Value="1"
+                     Background="{DynamicResource BorderSoft}"
+                     Foreground="{DynamicResource Accent}" />
+      </StackPanel>
+    </Border>
+
+    <Border Grid.Row="1" Background="{DynamicResource SunkenBackground}">
+      <ScrollViewer Name="LogScroller" Padding="18,12">
+        <ItemsControl ItemsSource="{Binding Lines}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="sys:String">
+              <TextBlock Text="{Binding}" Classes="mono" FontSize="11.5" LineHeight="19"
+                         Foreground="{DynamicResource TextDim}" TextWrapping="Wrap" />
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </ScrollViewer>
+    </Border>
+
+    <Border Grid.Row="2" Background="{DynamicResource PanelBackground}"
+            BorderBrush="{DynamicResource BorderNormal}" BorderThickness="0,1,0,0">
+      <Grid ColumnDefinitions="Auto,*,Auto" Margin="18,0">
+        <Ellipse Grid.Column="0" Width="7" Height="7" VerticalAlignment="Center"
+                 Fill="{DynamicResource Accent}" IsVisible="{Binding IsRunning}" />
+        <Ellipse Grid.Column="0" Width="7" Height="7" VerticalAlignment="Center"
+                 Fill="{DynamicResource Green}" IsVisible="{Binding Succeeded}" />
+
+        <TextBlock Grid.Column="1" Text="{Binding FooterNote}" Classes="dim" FontSize="11.5"
+                   Margin="10,0" VerticalAlignment="Center"
+                   IsVisible="{Binding Error, Converter={x:Static conv:ObjectConverters.IsNull}}" />
+
+        <TextBlock Grid.Column="1" Text="{Binding Error}" FontSize="11.5" Margin="10,0"
+                   VerticalAlignment="Center" Foreground="{DynamicResource Red}"
+                   TextTrimming="CharacterEllipsis"
+                   IsVisible="{Binding Error, Converter={x:Static conv:ObjectConverters.IsNotNull}}" />
+
+        <Button Grid.Column="2" Content="Cancel" Click="OnCancel" IsVisible="{Binding IsRunning}" />
+        <Button Grid.Column="2" Classes="primary" Content="Close" Height="30" Click="OnClose"
+                IsVisible="{Binding !IsRunning}" />
+      </Grid>
+    </Border>
+  </Grid>
+</Window>

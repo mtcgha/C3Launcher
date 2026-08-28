@@ -1,0 +1,18 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Docker.DotNet.Enhanced" Version="4.3.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Remove="Container\**" />
+    <Content Include="Container\**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

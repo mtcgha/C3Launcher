@@ -1,0 +1,10 @@
+*.json
+*.txt
+*.sql
+*.config
+*.env
+*.lic
+*.licx
+*.pubxml
+*.keystore
+.dir-history

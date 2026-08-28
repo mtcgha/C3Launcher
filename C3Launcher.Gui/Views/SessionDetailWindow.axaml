@@ -1,0 +1,188 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:C3Launcher.Gui.ViewModels"
+        xmlns:conv="using:Avalonia.Data.Converters"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="860" d:DesignHeight="640"
+        x:Class="C3Launcher.Gui.Views.SessionDetailWindow"
+        x:DataType="vm:SessionDetailViewModel"
+        Icon="/Assets/c3launcher.ico"
+        Title="Session"
+        Width="860" Height="640" MinWidth="700" MinHeight="500"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource AppBackground}"
+        FontFamily="{DynamicResource UiFont}">
+
+  <Grid RowDefinitions="*,52">
+
+    <ScrollViewer Grid.Row="0">
+      <StackPanel Spacing="16" Margin="18,16">
+
+        <!-- identity + tiles -->
+        <Grid ColumnDefinitions="*,108,108,108">
+          <StackPanel Grid.Column="0" Spacing="5" VerticalAlignment="Center">
+            <TextBlock Text="{Binding Name}" FontSize="16" FontWeight="SemiBold" />
+            <TextBlock>
+              <Run Text="{Binding ShortId}" FontFamily="{DynamicResource MonoFont}" FontSize="11"
+                   Foreground="{DynamicResource TextFaint}" />
+              <Run Text="   ·   up " FontSize="11.5" Foreground="{DynamicResource TextFainter}" />
+              <Run Text="{Binding Uptime}" FontSize="11.5" Foreground="{DynamicResource TextDim}" />
+            </TextBlock>
+          </StackPanel>
+
+          <Border Grid.Column="1" Margin="12,0,0,0" CornerRadius="5" Padding="12,10"
+                  Background="{DynamicResource PanelBackground}" BorderBrush="{DynamicResource BorderNormal}" BorderThickness="1">
+            <StackPanel Spacing="3">
+              <TextBlock Text="CPU" Classes="label" FontSize="9.5" />
+              <TextBlock Text="{Binding Cpu}" Classes="mono" FontSize="17" />
+            </StackPanel>
+          </Border>
+
+          <Border Grid.Column="2" Margin="12,0,0,0" CornerRadius="5" Padding="12,10"
+                  Background="{DynamicResource PanelBackground}" BorderBrush="{DynamicResource BorderNormal}" BorderThickness="1">
+            <StackPanel Spacing="3">
+              <TextBlock Text="MEMORY" Classes="label" FontSize="9.5" />
+              <TextBlock Text="{Binding Memory}" Classes="mono" FontSize="17" />
+            </StackPanel>
+          </Border>
+
+          <Border Grid.Column="3" Margin="12,0,0,0" CornerRadius="5" Padding="12,10"
+                  Background="{DynamicResource PanelBackground}" BorderBrush="{DynamicResource BorderNormal}" BorderThickness="1">
+            <StackPanel Spacing="3">
+              <TextBlock Text="NET I/O" Classes="label" FontSize="9.5" />
+              <TextBlock Text="{Binding Network}" Classes="mono" FontSize="17" />
+            </StackPanel>
+          </Border>
+        </Grid>
+
+        <!-- security -->
+        <StackPanel Spacing="8">
+          <TextBlock Text="SECURITY — READ BACK FROM DOCKER INSPECT" Classes="label" />
+          <ItemsControl ItemsSource="{Binding SecurityFlags}">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <WrapPanel Orientation="Horizontal" />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:SecurityFlagViewModel">
+                <Border CornerRadius="4" Padding="9,4" Margin="0,0,7,7" BorderThickness="1"
+                        Background="{DynamicResource PanelBackground}"
+                        BorderBrush="{DynamicResource BorderNormal}">
+                  <StackPanel Orientation="Horizontal" Spacing="6">
+                    <Path Data="{StaticResource IconCheck}" Width="11" Height="11" Stretch="Uniform"
+                          Stroke="{DynamicResource Green}" StrokeThickness="3" VerticalAlignment="Center"
+                          IsVisible="{Binding Enforced}" />
+                    <TextBlock Text="{Binding Text}" Classes="mono dim" FontSize="11" />
+                  </StackPanel>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+
+        <!-- processes -->
+        <StackPanel Spacing="8">
+          <StackPanel Orientation="Horizontal" Spacing="9">
+            <TextBlock Text="PROCESSES" Classes="label" />
+            <TextBlock Text="refreshed every 2s" FontSize="10.5" Foreground="{DynamicResource TextFainter}" />
+          </StackPanel>
+
+          <Border BorderBrush="{DynamicResource BorderNormal}" BorderThickness="1" CornerRadius="5" ClipToBounds="True">
+            <StackPanel>
+              <Border Background="{DynamicResource PanelBackground}"
+                      BorderBrush="{DynamicResource BorderNormal}" BorderThickness="0,0,0,1">
+                <Grid ColumnDefinitions="66,62,78,*" Height="26" Margin="12,0">
+                  <TextBlock Grid.Column="0" Text="PID" Classes="label" VerticalAlignment="Center" />
+                  <TextBlock Grid.Column="1" Text="USER" Classes="label" VerticalAlignment="Center" />
+                  <TextBlock Grid.Column="2" Text="TIME" Classes="label" VerticalAlignment="Center" />
+                  <TextBlock Grid.Column="3" Text="COMMAND" Classes="label" VerticalAlignment="Center" />
+                </Grid>
+              </Border>
+
+              <ItemsControl ItemsSource="{Binding Processes}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:ProcessRowViewModel">
+                    <Border BorderBrush="{DynamicResource RowSeparator}" BorderThickness="0,0,0,1">
+                      <Grid ColumnDefinitions="66,62,78,*" Height="28" Margin="12,0">
+                        <TextBlock Grid.Column="0" Text="{Binding Pid}" Classes="mono" FontSize="11.5"
+                                   Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center" />
+                        <TextBlock Grid.Column="1" Text="{Binding User}" Classes="mono" FontSize="11.5"
+                                   Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center" />
+                        <TextBlock Grid.Column="2" Text="{Binding Time}" Classes="mono" FontSize="11.5"
+                                   Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center" />
+                        <TextBlock Grid.Column="3" Text="{Binding Command}" Classes="mono dim" FontSize="11.5"
+                                   VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                      </Grid>
+                    </Border>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </StackPanel>
+          </Border>
+        </StackPanel>
+
+        <!-- mounts -->
+        <StackPanel Spacing="8">
+          <StackPanel Orientation="Horizontal" Spacing="9">
+            <TextBlock Text="MOUNTS" Classes="label" />
+            <TextBlock Text="{Binding MountsSummary}" FontSize="10.5" Foreground="{DynamicResource TextFainter}" />
+          </StackPanel>
+
+          <Border BorderBrush="{DynamicResource BorderNormal}" BorderThickness="1" CornerRadius="5" ClipToBounds="True">
+            <StackPanel>
+              <Border Background="{DynamicResource PanelBackground}"
+                      BorderBrush="{DynamicResource BorderNormal}" BorderThickness="0,0,0,1">
+                <Grid ColumnDefinitions="*,168,44" Height="26" Margin="12,0">
+                  <TextBlock Grid.Column="0" Text="SOURCE" Classes="label" VerticalAlignment="Center" />
+                  <TextBlock Grid.Column="1" Text="TARGET" Classes="label" VerticalAlignment="Center" />
+                  <TextBlock Grid.Column="2" Text="MODE" Classes="label" VerticalAlignment="Center" />
+                </Grid>
+              </Border>
+
+              <ItemsControl ItemsSource="{Binding Mounts}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:MountRowViewModel">
+                    <Border BorderBrush="{DynamicResource RowSeparator}" BorderThickness="0,0,0,1">
+                      <Grid ColumnDefinitions="*,168,44" Height="28" Margin="12,0">
+                        <TextBlock Grid.Column="0" Text="{Binding Source}" Classes="mono" FontSize="11.5"
+                                   Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center"
+                                   TextTrimming="CharacterEllipsis" />
+                        <TextBlock Grid.Column="1" Text="{Binding Target}" Classes="mono dim" FontSize="11.5"
+                                   VerticalAlignment="Center" />
+                        <TextBlock Grid.Column="2" Text="{Binding Mode}" Classes="mono" FontSize="11"
+                                   VerticalAlignment="Center"
+                                   Foreground="{DynamicResource TextFaint}" />
+                      </Grid>
+                    </Border>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </StackPanel>
+          </Border>
+        </StackPanel>
+      </StackPanel>
+    </ScrollViewer>
+
+    <Border Grid.Row="1" Background="{DynamicResource PanelBackground}"
+            BorderBrush="{DynamicResource BorderNormal}" BorderThickness="0,1,0,0">
+      <Grid ColumnDefinitions="*,Auto,Auto" Margin="18,0">
+        <TextBlock Grid.Column="0" Text="{Binding Error}" Foreground="{DynamicResource Red}" FontSize="11.5"
+                   VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                   IsVisible="{Binding Error, Converter={x:Static conv:StringConverters.IsNotNullOrEmpty}}" />
+
+        <Button Grid.Column="1" Classes="danger" Height="30" Margin="0,0,10,0"
+                Command="{Binding StopCommand}">
+          <StackPanel Orientation="Horizontal" Spacing="7">
+            <Path Data="{StaticResource IconStop}" Width="10" Height="10" Stretch="Uniform"
+                  Fill="{DynamicResource Red}" />
+            <TextBlock Text="Stop session" Foreground="{DynamicResource Red}" FontSize="12" />
+          </StackPanel>
+        </Button>
+
+        <Button Grid.Column="2" Content="Close" Height="30" Padding="20,0" Click="OnClose" />
+      </Grid>
+    </Border>
+  </Grid>
+</Window>

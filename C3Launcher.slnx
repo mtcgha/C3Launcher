@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="C3Launcher.Cli/C3Launcher.Cli.csproj" />
+  <Project Path="C3Launcher.Core/C3Launcher.Core.csproj" />
+  <Project Path="C3Launcher.Gui/C3Launcher.Gui.csproj" />
+</Solution>

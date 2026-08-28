@@ -1,0 +1,46 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <!-- surfaces -->
+  <SolidColorBrush x:Key="AppBackground" Color="#15171B" />
+  <SolidColorBrush x:Key="PanelBackground" Color="#1B1E23" />
+  <SolidColorBrush x:Key="RaisedBackground" Color="#262A31" />
+  <SolidColorBrush x:Key="SunkenBackground" Color="#101216" />
+  <SolidColorBrush x:Key="ControlBackground" Color="#15171B" />
+
+  <!-- lines -->
+  <SolidColorBrush x:Key="BorderStrong" Color="#3A4048" />
+  <SolidColorBrush x:Key="BorderNormal" Color="#2F343C" />
+  <SolidColorBrush x:Key="BorderSoft" Color="#24282E" />
+  <SolidColorBrush x:Key="RowSeparator" Color="#1F2329" />
+
+  <!-- text -->
+  <SolidColorBrush x:Key="TextPrimary" Color="#E6E9ED" />
+  <SolidColorBrush x:Key="TextSecondary" Color="#C8CED6" />
+  <SolidColorBrush x:Key="TextDim" Color="#9AA3AF" />
+  <SolidColorBrush x:Key="TextFaint" Color="#6E7681" />
+  <SolidColorBrush x:Key="TextFainter" Color="#4D545E" />
+
+  <!-- accents -->
+  <SolidColorBrush x:Key="Accent" Color="#4FB3D9" />
+  <SolidColorBrush x:Key="AccentFill" Color="#2E7FA3" />
+  <SolidColorBrush x:Key="AccentFillHover" Color="#358FB8" />
+  <SolidColorBrush x:Key="Amber" Color="#D9A441" />
+  <SolidColorBrush x:Key="AmberText" Color="#E6C98A" />
+  <SolidColorBrush x:Key="Green" Color="#6FBF73" />
+  <SolidColorBrush x:Key="Red" Color="#E06C75" />
+
+  <SolidColorBrush x:Key="AmberWash" Color="#D9A441" Opacity="0.10" />
+  <SolidColorBrush x:Key="AmberEdge" Color="#D9A441" Opacity="0.30" />
+  <SolidColorBrush x:Key="GreenWash" Color="#6FBF73" Opacity="0.12" />
+  <SolidColorBrush x:Key="GreenEdge" Color="#6FBF73" Opacity="0.28" />
+  <SolidColorBrush x:Key="RedWash" Color="#E06C75" Opacity="0.10" />
+  <SolidColorBrush x:Key="RedEdge" Color="#E06C75" Opacity="0.40" />
+  <SolidColorBrush x:Key="AccentWash" Color="#4FB3D9" Opacity="0.12" />
+  <SolidColorBrush x:Key="AccentEdge" Color="#4FB3D9" Opacity="0.30" />
+  <SolidColorBrush x:Key="HoverOverlay" Color="#FFFFFF" Opacity="0.04" />
+
+  <FontFamily x:Key="UiFont">Segoe UI, Segoe UI Variable Text, Inter, sans-serif</FontFamily>
+  <FontFamily x:Key="MonoFont">Cascadia Mono, Consolas, Courier New, monospace</FontFamily>
+
+</ResourceDictionary>

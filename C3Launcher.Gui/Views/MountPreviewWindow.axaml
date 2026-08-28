@@ -1,0 +1,103 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:C3Launcher.Gui.ViewModels"
+        xmlns:sys="using:System"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="720" d:DesignHeight="560"
+        x:Class="C3Launcher.Gui.Views.MountPreviewWindow"
+        x:DataType="vm:MountPreviewViewModel"
+        Icon="/Assets/c3launcher.ico"
+        Title="Mount filtering preview"
+        Width="720" Height="560" MinWidth="620" MinHeight="420"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource AppBackground}"
+        FontFamily="{DynamicResource UiFont}">
+
+  <Grid RowDefinitions="*,Auto">
+
+    <Grid Grid.Row="0" RowDefinitions="Auto,Auto,*" Margin="18,16">
+
+      <!-- warning callout -->
+      <Border Grid.Row="0" CornerRadius="5" Padding="14,12" Margin="0,0,0,14"
+              Background="{DynamicResource AmberWash}" BorderBrush="{DynamicResource AmberEdge}" BorderThickness="1"
+              IsVisible="{Binding HasWarning}">
+        <Grid ColumnDefinitions="Auto,*">
+          <Path Grid.Column="0" Data="{StaticResource IconWarning}" Width="16" Height="16" Stretch="Uniform"
+                Stroke="{DynamicResource Amber}" StrokeThickness="2"
+                VerticalAlignment="Top" Margin="0,1,11,0" />
+          <StackPanel Grid.Column="1" Spacing="6">
+            <TextBlock Text="{Binding WarningHeadline}" FontSize="12.5" Foreground="{DynamicResource AmberText}" />
+            <TextBlock Text="{Binding WarningDetail}" FontSize="11.5" Classes="dim"
+                       TextWrapping="Wrap" LineHeight="17" />
+            <ItemsControl ItemsSource="{Binding BuildCriticalFiles}" Margin="0,2,0,0">
+              <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                  <WrapPanel Orientation="Horizontal" />
+                </ItemsPanelTemplate>
+              </ItemsControl.ItemsPanel>
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="sys:String">
+                  <Border CornerRadius="3" Padding="7,2" Margin="0,0,6,0"
+                          Background="{DynamicResource AmberWash}">
+                    <TextBlock Text="{Binding}" Classes="mono" FontSize="11"
+                               Foreground="{DynamicResource AmberText}" />
+                  </Border>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+        </Grid>
+      </Border>
+
+      <TextBlock Grid.Row="1" Margin="0,0,0,12">
+        <Run Text="{Binding MatchCountText}" FontSize="13" />
+        <Run Text="  " />
+        <Run Text="{Binding Summary}" FontSize="12" Foreground="{DynamicResource TextFaint}" />
+      </TextBlock>
+
+      <Border Grid.Row="2" BorderBrush="{DynamicResource BorderNormal}" BorderThickness="1" CornerRadius="5"
+              ClipToBounds="True">
+        <Grid RowDefinitions="28,*">
+          <Border Grid.Row="0" Background="{DynamicResource PanelBackground}"
+                  BorderBrush="{DynamicResource BorderNormal}" BorderThickness="0,0,0,1">
+            <Grid ColumnDefinitions="150,62,*" Margin="12,0">
+              <TextBlock Grid.Column="0" Text="PATTERN" Classes="label" VerticalAlignment="Center" />
+              <TextBlock Grid.Column="1" Text="MATCHES" Classes="label" VerticalAlignment="Center" />
+              <TextBlock Grid.Column="2" Text="EXAMPLES" Classes="label" VerticalAlignment="Center" />
+            </Grid>
+          </Border>
+
+          <ScrollViewer Grid.Row="1">
+            <ItemsControl ItemsSource="{Binding Patterns}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:PatternRowViewModel">
+                  <Border BorderBrush="{DynamicResource RowSeparator}" BorderThickness="0,0,0,1"
+                          Opacity="{Binding RowOpacity}">
+                    <Grid ColumnDefinitions="150,62,*" Height="34" Margin="12,0">
+                      <TextBlock Grid.Column="0" Text="{Binding Pattern}" Classes="mono" VerticalAlignment="Center"
+                                 Foreground="{DynamicResource TextSecondary}" />
+                      <TextBlock Grid.Column="1" Text="{Binding Count}" Classes="mono" VerticalAlignment="Center" />
+                      <TextBlock Grid.Column="2" Text="{Binding Examples}" Classes="mono faint" FontSize="11"
+                                 VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                    </Grid>
+                  </Border>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </ScrollViewer>
+        </Grid>
+      </Border>
+    </Grid>
+
+    <Border Grid.Row="1" Height="56" Background="{DynamicResource PanelBackground}"
+            BorderBrush="{DynamicResource BorderNormal}" BorderThickness="0,1,0,0">
+      <Grid ColumnDefinitions="*,Auto,Auto" Margin="18,0">
+        <TextBlock Grid.Column="0" Text="{Binding MountIgnorePath}" Classes="mono faint" FontSize="11"
+                   VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+        <Button Grid.Column="1" Content="Edit patterns…" Margin="0,0,10,0" Click="OnEditPatterns" />
+        <Button Grid.Column="2" Classes="primary" Content="Close" Height="30" Click="OnClose" />
+      </Grid>
+    </Border>
+  </Grid>
+</Window>
