@@ -13,8 +13,6 @@
   <StreamGeometry x:Key="IconStop">M5 5h14v14H5z</StreamGeometry>
   <StreamGeometry x:Key="IconCheck">M20 6 9 17 4 12</StreamGeometry>
   <StreamGeometry x:Key="IconArrowDown">M12 5v14 M19 12l-7 7-7-7</StreamGeometry>
-  <StreamGeometry x:Key="IconMaximize">M5 5h14v14H5z</StreamGeometry>
-  <StreamGeometry x:Key="IconClose">M5 5l14 14 M19 5L5 19</StreamGeometry>
   <StreamGeometry x:Key="IconTrash">M3 6h18 M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2 M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6</StreamGeometry>
 
 </ResourceDictionary>

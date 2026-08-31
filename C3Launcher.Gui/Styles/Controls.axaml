@@ -105,24 +105,6 @@
     <Setter Property="BorderBrush" Value="Transparent" />
   </Style>
 
-  <!-- window caption buttons -->
-  <Style Selector="Button.caption">
-    <Setter Property="Background" Value="Transparent" />
-    <Setter Property="BorderThickness" Value="0" />
-    <Setter Property="CornerRadius" Value="0" />
-    <Setter Property="Width" Value="44" />
-    <Setter Property="Height" Value="32" />
-    <Setter Property="Padding" Value="0" />
-  </Style>
-
-  <Style Selector="Button.caption:pointerover /template/ ContentPresenter#PART_ContentPresenter">
-    <Setter Property="Background" Value="{DynamicResource HoverOverlay}" />
-  </Style>
-
-  <Style Selector="Button.close:pointerover /template/ ContentPresenter#PART_ContentPresenter">
-    <Setter Property="Background" Value="#C0303A" />
-  </Style>
-
   <Style Selector="Button.link">
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="BorderThickness" Value="0" />
@@ -208,6 +190,31 @@
     <Setter Property="FontSize" Value="12" />
     <Setter Property="Padding" Value="10,0" />
     <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+
+  <Style Selector="ComboBox /template/ Border#Background">
+    <Setter Property="Background" Value="{DynamicResource ControlBackground}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderStrong}" />
+  </Style>
+
+  <Style Selector="ComboBox:pointerover /template/ Border#Background">
+    <Setter Property="Background" Value="{DynamicResource ControlBackground}" />
+    <Setter Property="BorderBrush" Value="#4A515B" />
+  </Style>
+
+  <Style Selector="ComboBox:pressed /template/ Border#Background">
+    <Setter Property="Background" Value="{DynamicResource ControlBackground}" />
+    <Setter Property="BorderBrush" Value="#4A515B" />
+  </Style>
+
+  <Style Selector="ComboBox:focus /template/ Border#Background">
+    <Setter Property="Background" Value="{DynamicResource ControlBackground}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentFill}" />
+  </Style>
+
+  <Style Selector="ComboBox:focus-within /template/ Border#Background">
+    <Setter Property="Background" Value="{DynamicResource ControlBackground}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentFill}" />
   </Style>
 
   <!-- ComboBoxItem derives from ListBoxItem, but an Avalonia type selector matches
