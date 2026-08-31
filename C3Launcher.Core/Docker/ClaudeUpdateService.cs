@@ -96,11 +96,13 @@ public sealed partial class ClaudeUpdateService
     }
 
     /// <summary>
-    /// The version a build should pin, in order: an approved update, then whatever
-    /// is already installed, then the newest soaked release. Leaving this null lets
-    /// the Dockerfile's `CLAUDE_VERSION=latest` default decide instead, and npm's
-    /// latest can be a release the soak would have rejected — so null is returned
-    /// only when none of the three is knowable at all.
+    /// The version a build should pin. An explicitly approved update wins; otherwise
+    /// the soak policy decides, which means upgrading to the newest sufficiently old
+    /// release and holding at the installed one when there is nothing newer.
+    ///
+    /// Leaving this null would let the Dockerfile's `CLAUDE_VERSION=latest` default
+    /// choose, and npm's latest can be a release the soak would have rejected — so
+    /// null comes back only when nothing at all is knowable.
     /// </summary>
     public async Task<string?> ResolveBuildVersionAsync(
         string image,
@@ -111,10 +113,10 @@ public sealed partial class ClaudeUpdateService
         if (!string.IsNullOrWhiteSpace(approved))
             return approved;
 
+        string? installed = null;
         try
         {
-            if (await GetInstalledVersionAsync(image, cancellationToken) is { } installed)
-                return installed;
+            installed = await GetInstalledVersionAsync(image, cancellationToken);
         }
         catch (OperationCanceledException)
         {
@@ -122,10 +124,20 @@ public sealed partial class ClaudeUpdateService
         }
         catch (Exception)
         {
-            // No image yet, or its version can't be read; fall through to the registry.
+            // No image yet, or its version can't be read; the registry decides alone.
         }
 
-        return await GetSoakedVersionAsync(soak, cancellationToken);
+        var soaked = await GetSoakedVersionAsync(soak, cancellationToken);
+
+        if (installed is null)
+            return soaked;
+
+        return soaked is not null
+            && System.Version.TryParse(soaked, out var candidate)
+            && System.Version.TryParse(installed, out var current)
+            && candidate > current
+                ? soaked
+                : installed;
     }
 
     /// <summary>
@@ -182,9 +194,11 @@ public sealed partial class ClaudeUpdateService
     /// </summary>
     private static string? ParseVersion(IReadOnlyList<string> output)
     {
+        // The probe runs with a TTY, so the CLI may colour its output. Both patterns
+        // below are anchored, and a leading escape sequence would defeat them.
         var lines = string.Join('\n', output)
             .Split('\n')
-            .Select(line => line.Trim())
+            .Select(line => AnsiEscapePattern().Replace(line, string.Empty).Trim())
             .ToArray();
 
         foreach (var line in lines)
@@ -207,4 +221,8 @@ public sealed partial class ClaudeUpdateService
 
     [GeneratedRegex(@"^v?(\d+\.\d+\.\d+)")]
     private static partial Regex LeadingVersionPattern();
+
+    /// <summary>Any ECMA-48 control sequence: escape, parameters, intermediates, final byte.</summary>
+    [GeneratedRegex(@"\x1B\[[0-?]*[ -/]*[@-~]")]
+    private static partial Regex AnsiEscapePattern();
 }

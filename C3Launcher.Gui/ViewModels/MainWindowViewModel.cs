@@ -7,12 +7,15 @@ using C3Launcher.Core.Mounting;
 using C3Launcher.Core.Projects;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using System.Collections.Concurrent;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 
 namespace C3Launcher.Gui.ViewModels;
 
 public sealed record ModelChoice(string Label, string? Value);
+
+public sealed record PermissionModeChoice(string Label, string? Value);
 
 public partial class MainWindowViewModel : ViewModelBase, IDisposable
 {
@@ -22,9 +25,12 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     private readonly ProjectStore _store = new();
     private readonly SessionLauncher _launcher = new();
     private readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(20) };
-    private readonly Dictionary<string, LaunchedSession> _liveSessions = [];
+    // Concurrent: the Docker event pump removes from a background thread while a
+    // launch adds from the UI thread.
+    private readonly ConcurrentDictionary<string, LaunchedSession> _liveSessions = new();
     private readonly List<ProjectItemViewModel> _allProjects = [];
     private readonly DispatcherTimer _timer;
+    private readonly PermissionModeChoice _defaultPermissionMode;
 
     private LauncherSettings _settings = new();
     private DockerConnection? _docker;
@@ -36,7 +42,6 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     private MountScanResult? _scan;
     private int _tick;
     private int _toastId;
-    private int? _runningCount;
     private string? _installedClaudeVersion;
     private bool _suppressOptionWrites;
 
@@ -53,6 +58,20 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             new ModelChoice("Haiku 4.5", "haiku"),
         ];
         SelectedModel = ModelChoices[0];
+
+        PermissionModeChoices =
+        [
+            new PermissionModeChoice("Default (Claude Code setting)", null),
+            new PermissionModeChoice("Manual — ask before every tool", "manual"),
+            new PermissionModeChoice("Accept edits — files auto, rest asks", "acceptEdits"),
+            new PermissionModeChoice("Auto", "auto"),
+            new PermissionModeChoice("Plan", "plan"),
+            new PermissionModeChoice("Don't ask", "dontAsk"),
+            new PermissionModeChoice("Bypass permissions", "bypassPermissions"),
+        ];
+        _defaultPermissionMode = PermissionModeChoices
+            .First(m => m.Value == ProjectEntry.DefaultPermissionMode);
+        SelectedPermissionMode = _defaultPermissionMode;
 
         if (Design.IsDesignMode)
         {
@@ -75,6 +94,8 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     public ObservableCollection<SessionItemViewModel> Sessions { get; } = [];
 
     public IReadOnlyList<ModelChoice> ModelChoices { get; }
+
+    public IReadOnlyList<PermissionModeChoice> PermissionModeChoices { get; }
 
     [ObservableProperty]
     public partial string AccountEmail { get; set; } = "not signed in";
@@ -129,6 +150,9 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
 
     [ObservableProperty]
     public partial ModelChoice SelectedModel { get; set; }
+
+    [ObservableProperty]
+    public partial PermissionModeChoice SelectedPermissionMode { get; set; }
 
     [ObservableProperty]
     public partial string ExtraArgs { get; set; } = string.Empty;
@@ -197,10 +221,22 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         await RefreshSessionsAsync();
 
         // Anything not backing a live container is a leftover from a previous run
-        // that was closed or killed before its container died.
-        var liveSessionIds = Sessions.Select(s => s.Info.SessionId).ToList();
-        SessionWorkspace.Sweep(liveSessionIds);
-        await SessionNetworks.SweepAsync(_docker.Client, liveSessionIds);
+        // that was closed or killed before its container died. Listed straight from
+        // Docker rather than read off Sessions: RefreshSessionsAsync swallows a
+        // listing failure, and an empty list would read as "nothing is live" and
+        // sweep the mount sources and networks of running sessions.
+        try
+        {
+            var live = await _sessionService.ListAsync();
+            var liveSessionIds = live.Where(s => s.State is "running").Select(s => s.SessionId).ToList();
+
+            SessionWorkspace.Sweep(liveSessionIds);
+            await SessionNetworks.SweepAsync(_docker.Client, liveSessionIds);
+        }
+        catch (Exception)
+        {
+            // A daemon hiccup only costs us this sweep; the next start picks it up.
+        }
 
         await CheckForUpdatesAsync();
     }
@@ -284,6 +320,8 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
 
         _suppressOptionWrites = true;
         SelectedModel = ModelChoices.FirstOrDefault(m => m.Value == value?.Entry.Model) ?? ModelChoices[0];
+        SelectedPermissionMode = PermissionModeChoices
+            .FirstOrDefault(m => m.Value == value?.Entry.PermissionMode) ?? _defaultPermissionMode;
         ExtraArgs = value?.Entry.ExtraArgs ?? string.Empty;
         SkipUpdateCheck = value?.Entry.SkipUpdateCheck ?? false;
         _suppressOptionWrites = false;
@@ -300,6 +338,9 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     }
 
     partial void OnSelectedModelChanged(ModelChoice value) => WriteOption(e => e.Model = value.Value);
+
+    partial void OnSelectedPermissionModeChanged(PermissionModeChoice value) =>
+        WriteOption(e => e.PermissionMode = value.Value);
 
     partial void OnExtraArgsChanged(string value) => WriteOption(e => e.ExtraArgs = value);
 
@@ -444,7 +485,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             {
                 if (labels is not null && labels.TryGetValue(SessionLabels.SessionId, out var sessionId))
                 {
-                    if (_liveSessions.Remove(sessionId, out var session))
+                    if (_liveSessions.TryRemove(sessionId, out var session))
                         session.Dispose();
 
                     // Only once the container is gone is its network free to delete.
@@ -498,14 +539,6 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         OnPropertyChanged(nameof(HasSessions));
         OnPropertyChanged(nameof(SessionsSummary));
         OnPropertyChanged(nameof(SessionsTotals));
-
-        // Only a session appearing while the launcher is open pops the strip open.
-        // The first refresh just records the count, so the saved state survives
-        // startup, and a deliberate collapse holds until the strip empties.
-        if (_runningCount is 0 && running.Count > 0)
-            SessionsExpanded = true;
-
-        _runningCount = running.Count;
     }
 
     private void OnTimerTick(object? sender, EventArgs e)
@@ -564,7 +597,8 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         {
             if (_imageService is not null && ShowBuildWindowAsync is not null)
             {
-                if (!await ShowBuildWindowAsync(_imageService, ImageName, ResolveBuildVersion()))
+                var approved = SkipUpdateCheck ? null : PendingClaudeVersion;
+                if (!await ShowBuildWindowAsync(_imageService, ImageName, ResolveBuildVersion(approved)))
                 {
                     StatusText = "Build failed — session not started.";
                     return;
@@ -581,6 +615,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
                 ProjectPath = project.Entry.Path,
                 ProjectName = project.Entry.Name,
                 Model = SelectedModel.Value,
+                PermissionMode = SelectedPermissionMode.Value,
                 ExtraArgs = SplitArgs(ExtraArgs),
                 Image = ImageName,
                 MountIgnorePath = project.Entry.MountIgnorePath,
@@ -775,7 +810,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         if (_imageService is null || ShowBuildWindowAsync is null)
             return;
 
-        if (await ShowBuildWindowAsync(_imageService, ImageName, ResolveBuildVersion()))
+        if (await ShowBuildWindowAsync(_imageService, ImageName, ResolveBuildVersion(PendingClaudeVersion)))
         {
             PendingClaudeVersion = null;
             await CheckForUpdatesAsync();
@@ -788,13 +823,15 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     /// layer — an edit above it, a pruned cache — would then install whatever npm
     /// calls latest, soak policy or not.
     /// </summary>
-    private string? ResolveBuildVersion()
-    {
-        if (!SkipUpdateCheck && PendingClaudeVersion is { Length: > 0 } approved)
-            return approved;
-
-        return _installedClaudeVersion ?? PendingClaudeVersion;
-    }
+    /// <param name="approved">
+    /// The update to install, or null to re-pin whatever is already there. Callers
+    /// decide: a launch honours the selected project's skip-update setting, while
+    /// Rebuild is a deliberate click on a global action and always applies.
+    /// </param>
+    private string? ResolveBuildVersion(string? approved) =>
+        approved is { Length: > 0 }
+            ? approved
+            : _installedClaudeVersion ?? PendingClaudeVersion;
 
     [RelayCommand]
     private async Task PreviewMountsAsync()

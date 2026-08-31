@@ -2,6 +2,8 @@ namespace C3Launcher.Core.Projects;
 
 public sealed class ProjectEntry
 {
+    public const string DefaultPermissionMode = "manual";
+
     public string Id { get; set; } = Guid.NewGuid().ToString("n");
     public string Name { get; set; } = string.Empty;
     public string Path { get; set; } = string.Empty;
@@ -11,6 +13,7 @@ public sealed class ProjectEntry
     public int? PinSlot { get; set; }
 
     public string? Model { get; set; }
+    public string? PermissionMode { get; set; } = DefaultPermissionMode;
     public string? ExtraArgs { get; set; }
     public bool SkipUpdateCheck { get; set; }
 

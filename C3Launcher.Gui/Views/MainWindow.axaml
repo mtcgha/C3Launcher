@@ -9,7 +9,7 @@
         x:DataType="vm:MainWindowViewModel"
         Icon="/Assets/c3launcher.ico"
         Title="C3Launcher"
-        Width="900" Height="660" MinWidth="900" MinHeight="560"
+        Width="900" Height="660" MinWidth="900" MinHeight="600"
         Background="{DynamicResource AppBackground}"
         FontFamily="{DynamicResource UiFont}"
         ExtendClientAreaToDecorationsHint="True"
@@ -226,7 +226,7 @@
         <StackPanel Grid.Row="4" Spacing="12" Margin="0,16">
           <TextBlock Text="LAUNCH OPTIONS" Classes="label" />
 
-          <Grid ColumnDefinitions="96,*" RowDefinitions="Auto,Auto" >
+          <Grid ColumnDefinitions="96,*" RowDefinitions="Auto,Auto,Auto" >
             <TextBlock Grid.Row="0" Grid.Column="0" Text="Model" Classes="dim" VerticalAlignment="Center" />
             <ComboBox Grid.Row="0" Grid.Column="1" MaxWidth="300" HorizontalAlignment="Left" Width="300"
                       ItemsSource="{Binding ModelChoices}" SelectedItem="{Binding SelectedModel}">
@@ -237,8 +237,18 @@
               </ComboBox.ItemTemplate>
             </ComboBox>
 
-            <TextBlock Grid.Row="1" Grid.Column="0" Text="Extra args" Classes="dim" VerticalAlignment="Center" Margin="0,10,0,0" />
-            <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding ExtraArgs}" Margin="0,10,0,0"
+            <TextBlock Grid.Row="1" Grid.Column="0" Text="Permissions" Classes="dim" VerticalAlignment="Center" Margin="0,10,0,0" />
+            <ComboBox Grid.Row="1" Grid.Column="1" MaxWidth="300" HorizontalAlignment="Left" Width="300" Margin="0,10,0,0"
+                      ItemsSource="{Binding PermissionModeChoices}" SelectedItem="{Binding SelectedPermissionMode}">
+              <ComboBox.ItemTemplate>
+                <DataTemplate x:DataType="vm:PermissionModeChoice">
+                  <TextBlock Text="{Binding Label}" />
+                </DataTemplate>
+              </ComboBox.ItemTemplate>
+            </ComboBox>
+
+            <TextBlock Grid.Row="2" Grid.Column="0" Text="Extra args" Classes="dim" VerticalAlignment="Center" Margin="0,10,0,0" />
+            <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding ExtraArgs}" Margin="0,10,0,0"
                      PlaceholderText="--debug --verbose" FontFamily="{DynamicResource MonoFont}" FontSize="11.5" />
           </Grid>
 
@@ -294,6 +304,7 @@
             Background="{DynamicResource RaisedBackground}"
             BorderBrush="{DynamicResource BorderStrong}" BorderThickness="1"
             CornerRadius="6" Padding="16,10" BoxShadow="0 6 20 0 #66000000"
+            IsHitTestVisible="False"
             IsVisible="{Binding ToastText, Converter={x:Static conv:StringConverters.IsNotNullOrEmpty}}">
       <TextBlock Text="{Binding ToastText}" Foreground="{DynamicResource TextSecondary}" FontSize="12.5" />
     </Border>

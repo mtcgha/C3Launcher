@@ -56,6 +56,12 @@
     <Setter Property="Background" Value="#22262D" />
   </Style>
 
+  <!-- Fluent scales a pressed button to 98%; on a full-width row that reads as the
+       strip flinching, so a press shows as a colour change only. -->
+  <Style Selector="Button:pressed">
+    <Setter Property="RenderTransform" Value="none" />
+  </Style>
+
   <Style Selector="Button:disabled /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Opacity" Value="0.45" />
   </Style>

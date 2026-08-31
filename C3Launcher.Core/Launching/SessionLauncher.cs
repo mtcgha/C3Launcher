@@ -10,6 +10,7 @@ public sealed class LaunchOptions
     public required string ProjectPath { get; init; }
     public string? ProjectName { get; init; }
     public string? Model { get; init; }
+    public string? PermissionMode { get; init; }
     public IReadOnlyList<string> ExtraArgs { get; init; } = [];
     public string Image { get; init; } = ContainerAssets.ImageName;
     public string? MountIgnorePath { get; init; }
@@ -151,6 +152,12 @@ public sealed class SessionLauncher
         {
             args.Add("--model");
             args.Add(options.Model);
+        }
+
+        if (!string.IsNullOrWhiteSpace(options.PermissionMode))
+        {
+            args.Add("--permission-mode");
+            args.Add(options.PermissionMode);
         }
 
         args.AddRange(options.ExtraArgs);

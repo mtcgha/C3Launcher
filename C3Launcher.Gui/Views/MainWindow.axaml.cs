@@ -70,16 +70,6 @@ public partial class MainWindow : Window
             return;
         }
 
-        // Not while typing: the filter box and the extra-args box both want Delete.
-        if (e.Key == Key.Delete && e.KeyModifiers == KeyModifiers.None && e.Source is not TextBox)
-        {
-            if (Model is { SelectedProject: { } selected } model)
-                model.RemoveProjectCommand.Execute(selected);
-
-            e.Handled = true;
-            return;
-        }
-
         if (e.KeyModifiers != KeyModifiers.Control)
             return;
 

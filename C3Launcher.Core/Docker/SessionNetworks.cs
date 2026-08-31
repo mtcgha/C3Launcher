@@ -16,6 +16,13 @@ public static class SessionNetworks
 {
     private const string NamePrefix = "c3launcher-";
 
+    /// <summary>
+    /// Compose creates the network before it creates the container, so for a moment
+    /// a perfectly healthy network has no session and no endpoints. Sweeping in that
+    /// window kills the launch it belongs to, so anything this new is left alone.
+    /// </summary>
+    private static readonly TimeSpan CreationGrace = TimeSpan.FromMinutes(1);
+
     public static string NameFor(string sessionId) => NamePrefix + sessionId;
 
     public static IReadOnlyDictionary<string, string> LabelsFor(string sessionId) =>
@@ -45,6 +52,13 @@ public static class SessionNetworks
         foreach (var network in networks)
         {
             if (!IsOurs(network, out var sessionId) || live.Contains(sessionId))
+                continue;
+
+            // A timestamp the daemon reports in an unexpected kind could land in the
+            // future; treat only a sane, recent age as "too new to judge", so a bad
+            // clock leaves leftovers swept rather than accumulating forever.
+            var age = DateTime.UtcNow - network.Created.ToUniversalTime();
+            if (age >= TimeSpan.Zero && age < CreationGrace)
                 continue;
 
             // Only populated by some daemon versions, so this narrows rather than
