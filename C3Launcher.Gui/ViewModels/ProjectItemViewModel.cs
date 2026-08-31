@@ -39,6 +39,12 @@ public partial class ProjectItemViewModel : ViewModelBase
 
     public string LaunchCountText => Entry.LaunchCount.ToString();
 
+    /// <summary>
+    /// Re-reads only what drifts with the clock, so the once-a-minute tick doesn't
+    /// churn every other binding on the item.
+    /// </summary>
+    public void RefreshElapsed() => OnPropertyChanged(nameof(LastOpenedText));
+
     public void Refresh()
     {
         Name = Entry.Name;
@@ -59,10 +65,13 @@ public partial class ProjectItemViewModel : ViewModelBase
     {
         { TotalMinutes: < 1 } => "just now",
         { TotalMinutes: < 60 } => $"{(int)age.TotalMinutes} min ago",
-        { TotalHours: < 24 } => $"{(int)age.TotalHours} hours ago",
-        { TotalDays: < 30 } => $"{(int)age.TotalDays} days ago",
-        _ => $"{(int)(age.TotalDays / 30)} months ago",
+        { TotalHours: < 24 } => Ago((int)age.TotalHours, "hour"),
+        { TotalDays: < 30 } => Ago((int)age.TotalDays, "day"),
+        _ => Ago((int)(age.TotalDays / 30), "month"),
     };
+
+    private static string Ago(int count, string unit) =>
+        count == 1 ? $"1 {unit} ago" : $"{count} {unit}s ago";
 
     partial void OnPinSlotChanged(int? value) => OnPropertyChanged(nameof(PinAccelerator));
 }

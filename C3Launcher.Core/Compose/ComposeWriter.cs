@@ -46,6 +46,20 @@ public static class ComposeWriter
 
         AppendScalarList(yaml, "command", spec.Command);
 
+        if (spec.Network is { } network)
+        {
+            yaml.AppendLine("networks:");
+            yaml.AppendLine("  default:");
+            yaml.AppendLine($"    name: {Quote(network.Name)}");
+
+            if (network.Labels.Count > 0)
+            {
+                yaml.AppendLine("    labels:");
+                foreach (var (key, value) in network.Labels)
+                    yaml.AppendLine($"      {Quote(key)}: {Quote(value)}");
+            }
+        }
+
         return yaml.ToString();
     }
 

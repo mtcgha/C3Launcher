@@ -36,9 +36,22 @@
   <SolidColorBrush x:Key="GreenEdge" Color="#6FBF73" Opacity="0.28" />
   <SolidColorBrush x:Key="RedWash" Color="#E06C75" Opacity="0.10" />
   <SolidColorBrush x:Key="RedEdge" Color="#E06C75" Opacity="0.40" />
+  <SolidColorBrush x:Key="RedEdgeHover" Color="#E06C75" Opacity="0.65" />
   <SolidColorBrush x:Key="AccentWash" Color="#4FB3D9" Opacity="0.12" />
   <SolidColorBrush x:Key="AccentEdge" Color="#4FB3D9" Opacity="0.30" />
   <SolidColorBrush x:Key="HoverOverlay" Color="#FFFFFF" Opacity="0.04" />
+
+  <!-- Anything Fluent styles for itself reaches for the OS accent colour, which is
+       where the purple in the Model dropdown came from. Pointing these at our own
+       accent keeps a control we haven't styled by hand from landing out of palette.
+       Application.Resources is looked up ahead of the theme's own, so these win. -->
+  <Color x:Key="SystemAccentColor">#2E7FA3</Color>
+  <Color x:Key="SystemAccentColorDark1">#26688A</Color>
+  <Color x:Key="SystemAccentColorDark2">#1E5470</Color>
+  <Color x:Key="SystemAccentColorDark3">#164056</Color>
+  <Color x:Key="SystemAccentColorLight1">#358FB8</Color>
+  <Color x:Key="SystemAccentColorLight2">#4FB3D9</Color>
+  <Color x:Key="SystemAccentColorLight3">#7BC8E4</Color>
 
   <FontFamily x:Key="UiFont">Segoe UI, Segoe UI Variable Text, Inter, sans-serif</FontFamily>
   <FontFamily x:Key="MonoFont">Cascadia Mono, Consolas, Courier New, monospace</FontFamily>

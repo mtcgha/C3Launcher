@@ -13,6 +13,7 @@ public sealed class ComposePlanRequest
     public SessionWorkspace? Workspace { get; init; }
     public IReadOnlyList<string> ClaudeArgs { get; init; } = [];
     public IReadOnlyDictionary<string, string> Labels { get; init; } = new Dictionary<string, string>();
+    public ComposeNetwork? Network { get; init; }
 }
 
 public static class ComposePlanner
@@ -56,6 +57,7 @@ public static class ComposePlanner
             Volumes = volumes,
             Command = request.ClaudeArgs,
             Labels = request.Labels,
+            Network = request.Network,
         };
     }
 }

@@ -8,8 +8,8 @@ public sealed record TerminalLaunch(bool Ok, string? Error, bool UsedWindowsTerm
 /// <summary>
 /// Claude Code is a full-screen TUI, so the session runs in a real terminal
 /// rather than anything embedded. Note wt.exe returns immediately — it hands the
-/// request to the existing Windows Terminal and exits — so its process exit says
-/// nothing about session lifetime. Track that through container events instead.
+/// request to Windows Terminal and exits — so its process exit says nothing
+/// about session lifetime. Track that through container events instead.
 /// </summary>
 public static class TerminalLauncher
 {
@@ -19,9 +19,13 @@ public static class TerminalLauncher
         string title,
         string workingDirectory)
     {
-        string[] compose = ["compose", "-f", composeFilePath, "run", "--rm", serviceName];
+        // No progress output: the TTY renderer repaints with cursor-movement escapes,
+        // which land garbled in a terminal tab that is still being created, and the
+        // plain writer prints each state twice. Errors still reach stderr, and the
+        // image is built locally so there is no pull worth watching.
+        string[] compose = ["compose", "--progress", "quiet", "-f", composeFilePath, "run", "--rm", serviceName];
 
-        if (TryStart("wt.exe", ["-w", "0", "new-tab", "--title", title, "-d", workingDirectory, "docker", .. compose], workingDirectory, out var error))
+        if (TryStart("wt.exe", ["-w", "new", "new-tab", "--title", title, "-d", workingDirectory, "docker", .. compose], workingDirectory, out var error))
             return new TerminalLaunch(true, null, true);
 
         // No Windows Terminal. A WinExe has no console of its own, so starting a

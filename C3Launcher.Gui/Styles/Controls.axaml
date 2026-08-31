@@ -44,7 +44,6 @@
     <Setter Property="FontSize" Value="12" />
     <Setter Property="VerticalContentAlignment" Value="Center" />
     <Setter Property="HorizontalContentAlignment" Value="Center" />
-    <Setter Property="Cursor" Value="Hand" />
   </Style>
 
   <Style Selector="Button:pointerover /template/ ContentPresenter#PART_ContentPresenter">
@@ -90,7 +89,14 @@
 
   <Style Selector="Button.danger:pointerover /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Background" Value="#3A2226" />
+    <Setter Property="BorderBrush" Value="{DynamicResource RedEdgeHover}" />
     <Setter Property="TextElement.Foreground" Value="{DynamicResource Red}" />
+  </Style>
+
+  <!-- full-width clickable row: hovers like a list item, not like a button -->
+  <Style Selector="Button.row:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource HoverOverlay}" />
+    <Setter Property="BorderBrush" Value="Transparent" />
   </Style>
 
   <!-- window caption buttons -->
@@ -114,16 +120,35 @@
   <Style Selector="Button.link">
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="BorderThickness" Value="0" />
-    <Setter Property="Foreground" Value="{DynamicResource TextFaint}" />
-    <Setter Property="Padding" Value="0" />
+    <Setter Property="Foreground" Value="{DynamicResource TextDim}" />
+    <Setter Property="Padding" Value="8,0" />
+    <Setter Property="CornerRadius" Value="4" />
     <Setter Property="Height" Value="34" />
     <Setter Property="HorizontalContentAlignment" Value="Left" />
     <Setter Property="FontSize" Value="11.5" />
   </Style>
 
-  <Style Selector="Button.link:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+  <Style Selector="Button.link /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Background" Value="Transparent" />
-    <Setter Property="TextElement.Foreground" Value="{DynamicResource TextDim}" />
+  </Style>
+
+  <Style Selector="Button.link Path">
+    <Setter Property="Stroke" Value="{DynamicResource TextDim}" />
+  </Style>
+
+  <!-- The icon and label would otherwise keep their own colours: a Foreground on
+       the presenter is inherited, and inheritance loses to a value set on the
+       element itself. So the hover state reaches both of them directly. -->
+  <Style Selector="Button.link:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource HoverOverlay}" />
+  </Style>
+
+  <Style Selector="Button.link:pointerover TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
+  </Style>
+
+  <Style Selector="Button.link:pointerover Path">
+    <Setter Property="Stroke" Value="{DynamicResource TextPrimary}" />
   </Style>
 
   <Style Selector="TextBox">
@@ -141,14 +166,29 @@
     <Setter Property="CaretBrush" Value="{DynamicResource Accent}" />
   </Style>
 
-  <Style Selector="TextBox:focus /template/ Border#PART_BorderElement">
-    <Setter Property="BorderBrush" Value="{DynamicResource Accent}" />
+  <!-- Order matters: Avalonia takes the last matching setter rather than the most
+       specific one, so the focus rules come after :pointerover to stop a focused
+       box turning grey under the cursor. Every state is pinned here, including
+       :focus-within — focus can land on the inner presenter instead of the
+       TextBox, and an uncovered state falls through to the Fluent accent. -->
+  <Style Selector="TextBox /template/ Border#PART_BorderElement">
     <Setter Property="Background" Value="{DynamicResource ControlBackground}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderStrong}" />
   </Style>
 
   <Style Selector="TextBox:pointerover /template/ Border#PART_BorderElement">
     <Setter Property="Background" Value="{DynamicResource ControlBackground}" />
     <Setter Property="BorderBrush" Value="#4A515B" />
+  </Style>
+
+  <Style Selector="TextBox:focus /template/ Border#PART_BorderElement">
+    <Setter Property="Background" Value="{DynamicResource ControlBackground}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentFill}" />
+  </Style>
+
+  <Style Selector="TextBox:focus-within /template/ Border#PART_BorderElement">
+    <Setter Property="Background" Value="{DynamicResource ControlBackground}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentFill}" />
   </Style>
 
   <Style Selector="ComboBox">
@@ -162,6 +202,39 @@
     <Setter Property="FontSize" Value="12" />
     <Setter Property="Padding" Value="10,0" />
     <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+
+  <!-- ComboBoxItem derives from ListBoxItem, but an Avalonia type selector matches
+       the exact type, so the ListBoxItem rules below never reach the dropdown.
+       Targeting ContentPresenter by type rather than by part name keeps this
+       working whatever Fluent calls it. -->
+  <Style Selector="ComboBoxItem">
+    <Setter Property="FontFamily" Value="{DynamicResource UiFont}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextSecondary}" />
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="MinHeight" Value="30" />
+    <Setter Property="Padding" Value="10,0" />
+    <Setter Property="CornerRadius" Value="3" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+
+  <Style Selector="ComboBoxItem /template/ ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+
+  <Style Selector="ComboBoxItem:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource HoverOverlay}" />
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource TextPrimary}" />
+  </Style>
+
+  <Style Selector="ComboBoxItem:selected /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource AccentFill}" />
+    <Setter Property="TextElement.Foreground" Value="#FFFFFF" />
+  </Style>
+
+  <Style Selector="ComboBoxItem:selected:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource AccentFillHover}" />
+    <Setter Property="TextElement.Foreground" Value="#FFFFFF" />
   </Style>
 
   <Style Selector="CheckBox">

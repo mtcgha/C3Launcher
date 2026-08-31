@@ -125,6 +125,9 @@ public sealed class SessionLauncher
                 Workspace = workspace,
                 ClaudeArgs = BuildClaudeArgs(options),
                 Labels = SessionLabels.For(sessionId, root, projectName),
+                Network = new ComposeNetwork(
+                    SessionNetworks.NameFor(sessionId),
+                    SessionNetworks.LabelsFor(sessionId)),
             });
 
             ComposeWriter.WriteTo(spec, workspace.ComposeFilePath);

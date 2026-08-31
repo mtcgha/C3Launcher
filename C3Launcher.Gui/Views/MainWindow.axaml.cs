@@ -32,7 +32,9 @@ public partial class MainWindow : Window
     {
         for (var current = source; current is not null; current = current.Parent as Control)
         {
-            if (current is TextBox or Button or ComboBox or CheckBox or ListBox or ListBoxItem)
+            // ListBoxItem but not ListBox: a click on an item keeps focus for arrow-key
+            // navigation, while one on the empty space below the items clears it.
+            if (current is TextBox or Button or ComboBox or CheckBox or ListBoxItem)
                 return true;
         }
 
@@ -50,6 +52,7 @@ public partial class MainWindow : Window
         model.ShowMountPreviewAsync = ShowMountPreviewAsync;
         model.ShowSessionDetailAsync = ShowSessionDetailAsync;
         model.ShowBuildWindowAsync = ShowBuildWindowAsync;
+        model.ConfirmAsync = ConfirmAsync;
 
         FilterBox.Focus();
 
@@ -63,6 +66,16 @@ public partial class MainWindow : Window
         if (e.Key == Key.Escape)
         {
             FocusManager.Focus(null);
+            e.Handled = true;
+            return;
+        }
+
+        // Not while typing: the filter box and the extra-args box both want Delete.
+        if (e.Key == Key.Delete && e.KeyModifiers == KeyModifiers.None && e.Source is not TextBox)
+        {
+            if (Model is { SelectedProject: { } selected } model)
+                model.RemoveProjectCommand.Execute(selected);
+
             e.Handled = true;
             return;
         }
@@ -128,4 +141,7 @@ public partial class MainWindow : Window
 
         return window.ShowDialog<bool>(this);
     }
+
+    private Task<bool> ConfirmAsync(ConfirmRequest request) =>
+        new ConfirmWindow { DataContext = request }.ShowDialog<bool>(this);
 }

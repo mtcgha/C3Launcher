@@ -27,5 +27,6 @@ public sealed class LauncherSettings
     public string? DockerEndpoint { get; set; }
     public bool CheckForUpdates { get; set; } = true;
     public int UpdateSoakDays { get; set; } = 7;
+    public bool SessionsExpanded { get; set; }
     public List<ProjectEntry> Projects { get; set; } = [];
 }

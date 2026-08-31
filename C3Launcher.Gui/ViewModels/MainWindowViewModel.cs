@@ -16,6 +16,9 @@ public sealed record ModelChoice(string Label, string? Value);
 
 public partial class MainWindowViewModel : ViewModelBase, IDisposable
 {
+    private const int ScanDebounceMs = 150;
+    private const int ToastDurationMs = 3000;
+
     private readonly ProjectStore _store = new();
     private readonly SessionLauncher _launcher = new();
     private readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(20) };
@@ -31,7 +34,10 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     private DockerEventMonitor? _events;
     private CancellationTokenSource? _scanCts;
     private MountScanResult? _scan;
-    private int _statsTick;
+    private int _tick;
+    private int _toastId;
+    private int? _runningCount;
+    private string? _installedClaudeVersion;
     private bool _suppressOptionWrites;
 
     public MainWindowViewModel()
@@ -62,6 +68,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     public Func<MountScanResult, string, Task>? ShowMountPreviewAsync { get; set; }
     public Func<SessionItemViewModel, SessionService, Task>? ShowSessionDetailAsync { get; set; }
     public Func<ImageBuildService, string, string?, Task<bool>>? ShowBuildWindowAsync { get; set; }
+    public Func<ConfirmRequest, Task<bool>>? ConfirmAsync { get; set; }
 
     public ObservableCollection<ProjectItemViewModel> Projects { get; } = [];
 
@@ -107,6 +114,9 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
 
     [ObservableProperty]
     public partial string? StatusText { get; set; }
+
+    [ObservableProperty]
+    public partial string? ToastText { get; set; }
 
     [ObservableProperty]
     public partial bool IsBusy { get; set; }
@@ -186,9 +196,11 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
 
         await RefreshSessionsAsync();
 
-        // Anything on disk that isn't backing a live container is a leftover from
-        // a previous run that was closed or killed before its container died.
-        SessionWorkspace.Sweep(Sessions.Select(s => s.Info.SessionId));
+        // Anything not backing a live container is a leftover from a previous run
+        // that was closed or killed before its container died.
+        var liveSessionIds = Sessions.Select(s => s.Info.SessionId).ToList();
+        SessionWorkspace.Sweep(liveSessionIds);
+        await SessionNetworks.SweepAsync(_docker.Client, liveSessionIds);
 
         await CheckForUpdatesAsync();
     }
@@ -219,6 +231,10 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     {
         _settings = _store.Load();
         _allProjects.Clear();
+
+        _suppressOptionWrites = true;
+        SessionsExpanded = _settings.SessionsExpanded;
+        _suppressOptionWrites = false;
 
         foreach (var entry in _settings.Projects)
             _allProjects.Add(new ProjectItemViewModel(entry));
@@ -252,6 +268,15 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     partial void OnFilterTextChanged(string value) => ApplyFilter();
 
     partial void OnBuildCriticalCountChanged(int value) => OnPropertyChanged(nameof(HasBuildCritical));
+
+    partial void OnSessionsExpandedChanged(bool value)
+    {
+        if (_suppressOptionWrites || Design.IsDesignMode)
+            return;
+
+        _settings.SessionsExpanded = value;
+        Save();
+    }
 
     partial void OnSelectedProjectChanged(ProjectItemViewModel? value)
     {
@@ -310,6 +335,10 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
 
         MountSummary = "scanning…";
 
+        await Task.Delay(ScanDebounceMs, CancellationToken.None);
+        if (token.IsCancellationRequested || SelectedProject != project)
+            return;
+
         try
         {
             var patterns = MountIgnorePattern.ParseFile(
@@ -347,25 +376,37 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         if (_updateService is null || _imageService is null)
             return;
 
+        var soak = TimeSpan.FromDays(_settings.UpdateSoakDays);
+
         if (!await _imageService.ImageExistsAsync(ImageName))
         {
             ImageVersion = "not built";
-            UpdateText = "image not built yet";
+            _installedClaudeVersion = null;
+
+            // Resolve a version even with no image, so the first build installs a
+            // release the soak approves rather than whatever `latest` points at.
+            PendingClaudeVersion = await _updateService.GetSoakedVersionAsync(soak);
+
+            UpdateText = PendingClaudeVersion is { } first
+                ? $"image not built yet — will install v{first}"
+                : "image not built yet";
             UpdateAvailable = false;
             return;
         }
 
         if (!_settings.CheckForUpdates)
         {
-            ImageVersion = await _updateService.GetInstalledVersionAsync(ImageName) is { } v ? $"v{v}" : "—";
+            _installedClaudeVersion = await _updateService.GetInstalledVersionAsync(ImageName);
+            ImageVersion = _installedClaudeVersion is { } v ? $"v{v}" : "—";
             UpdateText = "update check disabled";
             return;
         }
 
         UpdateText = "checking for updates…";
 
-        var status = await _updateService.CheckAsync(ImageName, TimeSpan.FromDays(_settings.UpdateSoakDays));
+        var status = await _updateService.CheckAsync(ImageName, soak);
 
+        _installedClaudeVersion = status.InstalledVersion;
         ImageVersion = status.InstalledVersion is { } installed ? $"v{installed}" : "—";
 
         if (status.Error is { } error)
@@ -401,11 +442,14 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
 
             if (action is "die" or "destroy" or "stop")
             {
-                if (labels is not null
-                    && labels.TryGetValue(SessionLabels.SessionId, out var sessionId)
-                    && _liveSessions.Remove(sessionId, out var session))
+                if (labels is not null && labels.TryGetValue(SessionLabels.SessionId, out var sessionId))
                 {
-                    session.Dispose();
+                    if (_liveSessions.Remove(sessionId, out var session))
+                        session.Dispose();
+
+                    // Only once the container is gone is its network free to delete.
+                    if (action is "destroy" && _docker is { } docker)
+                        await SessionNetworks.DeleteAsync(docker.Client, sessionId);
                 }
             }
 
@@ -455,8 +499,13 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         OnPropertyChanged(nameof(SessionsSummary));
         OnPropertyChanged(nameof(SessionsTotals));
 
-        if (Sessions.Count > 0 && !SessionsExpanded && running.Count > 0)
+        // Only a session appearing while the launcher is open pops the strip open.
+        // The first refresh just records the count, so the saved state survives
+        // startup, and a deliberate collapse holds until the strip empties.
+        if (_runningCount is 0 && running.Count > 0)
             SessionsExpanded = true;
+
+        _runningCount = running.Count;
     }
 
     private void OnTimerTick(object? sender, EventArgs e)
@@ -464,8 +513,15 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         foreach (var session in Sessions)
             session.Tick();
 
-        if (++_statsTick % 3 == 0)
+        _tick++;
+
+        if (_tick % 3 == 0)
             _ = SampleAllAsync();
+
+        // Only the selected project shows LAST OPENED, and "X min ago" cannot change
+        // faster than once a minute, so anything more often is wasted work.
+        if (_tick % 60 == 0)
+            SelectedProject?.RefreshElapsed();
     }
 
     private async Task SampleAllAsync()
@@ -508,8 +564,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         {
             if (_imageService is not null && ShowBuildWindowAsync is not null)
             {
-                var version = SkipUpdateCheck ? null : PendingClaudeVersion;
-                if (!await ShowBuildWindowAsync(_imageService, ImageName, version))
+                if (!await ShowBuildWindowAsync(_imageService, ImageName, ResolveBuildVersion()))
                 {
                     StatusText = "Build failed — session not started.";
                     return;
@@ -636,16 +691,46 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     }
 
     [RelayCommand]
-    private void RemoveProject(ProjectItemViewModel? project)
+    private async Task RemoveProjectAsync(ProjectItemViewModel? project)
     {
         project ??= SelectedProject;
         if (project is null)
             return;
 
+        if (ConfirmAsync is not null && !await ConfirmAsync(new ConfirmRequest(
+            $"Remove {project.Entry.Name}?",
+            "Drops the project from this list, along with its model choice and extra arguments.",
+            "Remove",
+            project.IsRunning
+                ? "A session is running for this project. It keeps running, and still shows "
+                    + "in the sessions strip until it exits."
+                : null)))
+        {
+            return;
+        }
+
         _settings.Projects.Remove(project.Entry);
         _allProjects.Remove(project);
         Save();
         ApplyFilter();
+
+        _ = ShowToastAsync($"Removed {project.Entry.Name}");
+    }
+
+    /// <summary>
+    /// A later toast supersedes an earlier one's dismissal, which is what the id
+    /// guards. The delay deliberately isn't cancellable: a cancelled Task.Delay
+    /// throws, and the debugger reports that on every replaced toast.
+    /// </summary>
+    private async Task ShowToastAsync(string message)
+    {
+        var id = ++_toastId;
+        ToastText = message;
+
+        await Task.Delay(ToastDurationMs, CancellationToken.None);
+
+        if (_toastId == id)
+            ToastText = null;
     }
 
     [RelayCommand]
@@ -690,11 +775,25 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         if (_imageService is null || ShowBuildWindowAsync is null)
             return;
 
-        if (await ShowBuildWindowAsync(_imageService, ImageName, PendingClaudeVersion))
+        if (await ShowBuildWindowAsync(_imageService, ImageName, ResolveBuildVersion()))
         {
             PendingClaudeVersion = null;
             await CheckForUpdatesAsync();
         }
+    }
+
+    /// <summary>
+    /// Always names a version if one is knowable. Passing null would let the
+    /// Dockerfile's `CLAUDE_VERSION=latest` default choose, and any rebuild of that
+    /// layer — an edit above it, a pruned cache — would then install whatever npm
+    /// calls latest, soak policy or not.
+    /// </summary>
+    private string? ResolveBuildVersion()
+    {
+        if (!SkipUpdateCheck && PendingClaudeVersion is { Length: > 0 } approved)
+            return approved;
+
+        return _installedClaudeVersion ?? PendingClaudeVersion;
     }
 
     [RelayCommand]

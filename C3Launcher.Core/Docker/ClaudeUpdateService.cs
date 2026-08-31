@@ -71,6 +71,63 @@ public sealed partial class ClaudeUpdateService
         return new ClaudeUpdateStatus(installed, latest, available, null);
     }
 
+    /// <summary>The newest release old enough to have soaked, or null when unreachable.</summary>
+    public async Task<string?> GetSoakedVersionAsync(
+        TimeSpan? soak = null,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var release = await _npm.GetLatestReleaseBeforeAsync(
+                NpmRegistryClient.ClaudeCodePackage,
+                DateTimeOffset.UtcNow - (soak ?? DefaultSoak),
+                cancellationToken);
+
+            return release?.Version.ToString();
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// The version a build should pin, in order: an approved update, then whatever
+    /// is already installed, then the newest soaked release. Leaving this null lets
+    /// the Dockerfile's `CLAUDE_VERSION=latest` default decide instead, and npm's
+    /// latest can be a release the soak would have rejected — so null is returned
+    /// only when none of the three is knowable at all.
+    /// </summary>
+    public async Task<string?> ResolveBuildVersionAsync(
+        string image,
+        string? approved = null,
+        TimeSpan? soak = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (!string.IsNullOrWhiteSpace(approved))
+            return approved;
+
+        try
+        {
+            if (await GetInstalledVersionAsync(image, cancellationToken) is { } installed)
+                return installed;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception)
+        {
+            // No image yet, or its version can't be read; fall through to the registry.
+        }
+
+        return await GetSoakedVersionAsync(soak, cancellationToken);
+    }
+
     /// <summary>
     /// Bypasses the entrypoint so no auth mounts are needed, matching
     /// cc.ps1's `docker run --entrypoint /usr/local/bin/claude ... --version`.
@@ -101,8 +158,7 @@ public sealed partial class ClaudeUpdateService
                 progress,
                 cancellationToken);
 
-            var match = VersionPattern().Match(string.Join('\n', progress.Items));
-            return match.Success ? match.Groups[1].Value : null;
+            return ParseVersion(progress.Items);
         }
         finally
         {
@@ -117,6 +173,38 @@ public sealed partial class ClaudeUpdateService
         }
     }
 
-    [GeneratedRegex(@"(\d+\.\d+\.\d+)")]
-    private static partial Regex VersionPattern();
+    /// <summary>
+    /// `claude --version` prints "2.1.250 (Claude Code)", but a TTY merges stderr
+    /// into the same stream, so an update notice naming a different version can
+    /// share it. Take the line that looks like the real answer, and only fall back
+    /// to a leading version — never a number from mid-sentence — if the wording
+    /// changes upstream.
+    /// </summary>
+    private static string? ParseVersion(IReadOnlyList<string> output)
+    {
+        var lines = string.Join('\n', output)
+            .Split('\n')
+            .Select(line => line.Trim())
+            .ToArray();
+
+        foreach (var line in lines)
+        {
+            if (ClaudeVersionPattern().Match(line) is { Success: true } exact)
+                return exact.Groups[1].Value;
+        }
+
+        foreach (var line in lines)
+        {
+            if (LeadingVersionPattern().Match(line) is { Success: true } leading)
+                return leading.Groups[1].Value;
+        }
+
+        return null;
+    }
+
+    [GeneratedRegex(@"^v?(\d+\.\d+\.\d+)\S*\s+\(Claude Code\)", RegexOptions.IgnoreCase)]
+    private static partial Regex ClaudeVersionPattern();
+
+    [GeneratedRegex(@"^v?(\d+\.\d+\.\d+)")]
+    private static partial Regex LeadingVersionPattern();
 }

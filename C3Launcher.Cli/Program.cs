@@ -40,10 +40,14 @@ internal static class Program
         {
             Row("Building", $"{ContainerAssets.ImageName} image");
 
+            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(20) };
+            var updater = new ClaudeUpdateService(docker.Client, new NpmRegistryClient(http));
+            var version = await updater.ResolveBuildVersionAsync(ContainerAssets.ImageName);
+
             var builder = new ImageBuildService(docker.Client);
             var outcome = await builder.BuildAsync(
                 ContainerAssets.ImageName,
-                null,
+                version,
                 args.Verbose ? new ConsoleProgress() : null);
 
             if (!outcome.Ok)
@@ -74,23 +78,33 @@ internal static class Program
         Row("Starting", "session");
         Console.WriteLine();
 
-        return RunCompose(session);
+        var exitCode = RunCompose(session);
+
+        // The container is gone by now, so its network is free.
+        await SessionNetworks.DeleteAsync(docker.Client, session.SessionId);
+
+        return exitCode;
     }
 
     /// <summary>
-    /// Collects the temp folders of sessions whose containers are gone — ours from a
-    /// previous run, or a GUI session that was killed before its cleanup ran.
+    /// Collects the temp folders and networks of sessions whose containers are gone —
+    /// ours from a previous run, or a GUI session that was killed before its cleanup ran.
     /// </summary>
     private static async Task SweepAsync(DockerConnection docker, bool verbose)
     {
         try
         {
             var live = await new SessionService(docker.Client).ListAsync();
-            var swept = SessionWorkspace.Sweep(
-                live.Where(s => s.State is "running").Select(s => s.SessionId));
+            var liveSessionIds = live.Where(s => s.State is "running").Select(s => s.SessionId).ToList();
+
+            var swept = SessionWorkspace.Sweep(liveSessionIds);
+            var networks = await SessionNetworks.SweepAsync(docker.Client, liveSessionIds);
 
             if (verbose && swept > 0)
                 Row("Swept", $"{swept} stale session folder(s)");
+
+            if (verbose && networks > 0)
+                Row("Swept", $"{networks} stale session network(s)");
         }
         catch (Exception ex)
         {
