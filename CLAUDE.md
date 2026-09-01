@@ -177,6 +177,37 @@ exit says nothing about session lifetime. The container `die` event from
 `DockerEventMonitor` is the real signal, and what `LaunchedSession.Dispose`
 should wait for.
 
+That event is not guaranteed to arrive. Restarting the daemon — a Docker Desktop
+update, a crash — kills every container while the event stream is down, and
+Docker does not replay what was missed once `DockerEventMonitor` re-subscribes.
+So the strip is also re-listed on a timer (`MainWindowViewModel.PollAsync`), and
+`Drop` is what takes a row off it: it removes the session, disposes its
+workspace, and recomputes the per-project running dot from `Sessions` rather
+than from Docker, so a row removed by hand leaves the same UI as one that
+exited. `SessionService.StopAsync` returns `StopOutcome`, whose `AlreadyGone`
+distinguishes a 404 from the daemon — nothing to stop, drop the row — from a
+real failure worth putting in front of the user.
+
+## Errors and toasts
+
+Every user-facing error goes to a toast, and nowhere else. `ToastHost` owns the
+collection and the dismiss command; each window that can fail exposes one as
+`Toasts` and renders it with the shared `ToastOverlay`, so there is a single
+place to learn to look. `Show` expires itself after a few seconds; `ShowError`
+has no timer and carries a close button, because a failure is usually something
+the user has to act on and a message that fades takes the only account of it.
+Errors dedupe on their text, and over the cap the oldest *transient* toast is
+dropped first so an unread error is not evicted by chatter.
+
+`ToastHost` deliberately is not a `ViewModelBase`: `ViewLocator` resolves a view
+for anything that is one, and a host is a piece of a screen rather than a screen.
+
+What is left in the other slots is state, not notification: `StatusText` narrates
+a launch in progress and is cleared in a `finally`, `MountSummary` says
+`scan failed` with the reason in the toast, and the update pill says
+`update check failed` — it is the green-tick pill, so an error string in it would
+read as success.
+
 ## Conventions
 
 Comments explain **why**, not what — the constraint, the failure that motivated
@@ -189,8 +220,8 @@ what was removed. Describe how it works now.
 File-scoped namespaces, `sealed` by default, records for data, collection
 expressions, and `Try*(out …)` for expected failure. Errors that a user should
 see come back as a result record with a message (`LaunchOutcome`,
-`BuildOutcome`, `ClaudeAccountResult`) rather than as exceptions; cleanup paths
-swallow exceptions on purpose.
+`BuildOutcome`, `StopOutcome`, `ClaudeAccountResult`) rather than as exceptions;
+cleanup paths swallow exceptions on purpose.
 
 GUI view models use `[ObservableProperty] public partial` and `[RelayCommand]`.
 Core has no UI dependency and no Avalonia reference — keep it that way.

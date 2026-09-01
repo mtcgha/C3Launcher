@@ -1,7 +1,25 @@
+using System.Net;
+using System.Text.Json;
 using Docker.DotNet;
 using Docker.DotNet.Models;
 
 namespace C3Launcher.Core.Docker;
+
+/// <summary>
+/// Stopping a container the daemon has never heard of is not a failure worth
+/// reporting. A Docker Desktop restart — an update, a daemon crash — takes every
+/// container with it, and no die event survives the reconnect, so the caller's
+/// list can still name a container that is long gone. <see cref="AlreadyGone"/>
+/// tells it to drop the row rather than show an error.
+/// </summary>
+public sealed record StopOutcome(bool Ok, bool AlreadyGone, string? Error)
+{
+    public static readonly StopOutcome Stopped = new(true, false, null);
+
+    public static readonly StopOutcome Gone = new(true, true, null);
+
+    public static StopOutcome Failed(string error) => new(false, false, error);
+}
 
 public sealed class SessionService
 {
@@ -92,9 +110,66 @@ public sealed class SessionService
     public Task<ContainerInspectResponse> InspectAsync(string containerId, CancellationToken cancellationToken = default) =>
         _client.Containers.InspectContainerAsync(containerId, cancellationToken);
 
-    public Task StopAsync(string containerId, CancellationToken cancellationToken = default) =>
-        _client.Containers.StopContainerAsync(
-            containerId,
-            new ContainerStopParameters { WaitBeforeKillSeconds = 5 },
-            cancellationToken);
+    public async Task<StopOutcome> StopAsync(string containerId, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await _client.Containers.StopContainerAsync(
+                containerId,
+                new ContainerStopParameters { WaitBeforeKillSeconds = 5 },
+                cancellationToken);
+
+            return StopOutcome.Stopped;
+        }
+        catch (DockerContainerNotFoundException)
+        {
+            return StopOutcome.Gone;
+        }
+        catch (DockerApiException ex) when (ex.StatusCode is HttpStatusCode.NotFound)
+        {
+            return StopOutcome.Gone;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (DockerApiException ex)
+        {
+            return StopOutcome.Failed(Describe(ex));
+        }
+        catch (Exception ex)
+        {
+            // Not an answer from the daemon at all — a dropped named pipe or a
+            // refused connection, which is what a restart looks like mid-request.
+            return StopOutcome.Failed($"Docker did not respond: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// DockerApiException.Message is the status code plus the raw response body.
+    /// The daemon's own one-line reason is inside that body, and it is the only
+    /// part worth putting in front of a user.
+    /// </summary>
+    private static string Describe(DockerApiException ex)
+    {
+        if (!string.IsNullOrWhiteSpace(ex.ResponseBody))
+        {
+            try
+            {
+                using var body = JsonDocument.Parse(ex.ResponseBody);
+
+                if (body.RootElement.TryGetProperty("message", out var message)
+                    && message.GetString() is { Length: > 0 } reason)
+                {
+                    return reason;
+                }
+            }
+            catch (JsonException)
+            {
+                // Not the daemon's usual error shape; fall through to the code.
+            }
+        }
+
+        return $"Docker returned {(int)ex.StatusCode} ({ex.StatusCode})";
+    }
 }

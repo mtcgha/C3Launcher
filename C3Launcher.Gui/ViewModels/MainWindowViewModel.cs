@@ -19,7 +19,6 @@ public sealed record PermissionModeChoice(string Label, string? Value);
 public partial class MainWindowViewModel : ViewModelBase, IDisposable
 {
     private const int ScanDebounceMs = 150;
-    private const int ToastDurationMs = 3000;
 
     private readonly ProjectStore _store = new();
     private readonly SessionLauncher _launcher = new();
@@ -40,7 +39,6 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     private CancellationTokenSource? _scanCts;
     private MountScanResult? _scan;
     private int _tick;
-    private int _toastId;
     private string? _installedClaudeVersion;
     private bool _suppressOptionWrites;
 
@@ -92,6 +90,8 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
 
     public ObservableCollection<SessionItemViewModel> Sessions { get; } = [];
 
+    public ToastHost Toasts { get; } = new();
+
     public IReadOnlyList<ModelChoice> ModelChoices { get; }
 
     public IReadOnlyList<PermissionModeChoice> PermissionModeChoices { get; }
@@ -112,9 +112,6 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     public partial string? PendingClaudeVersion { get; set; }
 
     [ObservableProperty]
-    public partial string? DockerError { get; set; }
-
-    [ObservableProperty]
     public partial string FilterText { get; set; } = string.Empty;
 
     [ObservableProperty]
@@ -125,9 +122,6 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
 
     [ObservableProperty]
     public partial string? StatusText { get; set; }
-
-    [ObservableProperty]
-    public partial string? ToastText { get; set; }
 
     [ObservableProperty]
     public partial bool IsBusy { get; set; }
@@ -185,13 +179,14 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         }
         catch (Exception ex)
         {
-            DockerError = $"Could not create a Docker client: {ex.Message}";
+            Toasts.ShowError($"Could not create a Docker client: {ex.Message}");
+            UpdateText = "Docker unavailable";
             return;
         }
 
-        DockerError = await _docker.ProbeAsync();
-        if (DockerError is not null)
+        if (await _docker.ProbeAsync() is { } probeError)
         {
+            Toasts.ShowError(probeError);
             UpdateText = "Docker unavailable";
             return;
         }
@@ -329,7 +324,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         }
         catch (Exception ex)
         {
-            StatusText = $"Could not save settings: {ex.Message}";
+            Toasts.ShowError($"Could not save settings: {ex.Message}");
         }
     }
 
@@ -374,7 +369,9 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         }
         catch (Exception ex)
         {
-            MountSummary = $"scan failed: {ex.Message}";
+            // The summary slot is one line wide; the reason goes where it fits.
+            MountSummary = "scan failed";
+            Toasts.ShowError($"Could not scan {project.Entry.Name} for mount filtering: {ex.Message}");
         }
     }
 
@@ -418,8 +415,11 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
 
         if (status.Error is { } error)
         {
-            UpdateText = error;
+            // The pill it lands in is the "up to date" one, green tick and all, so
+            // the reason goes to a toast and the pill says only that it did not run.
+            UpdateText = "update check failed";
             UpdateAvailable = false;
+            Toasts.ShowError($"Could not check for Claude Code updates: {error}");
             return;
         }
 
@@ -484,7 +484,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         for (var i = Sessions.Count - 1; i >= 0; i--)
         {
             if (running.All(s => s.ContainerId != Sessions[i].ContainerId))
-                Sessions.RemoveAt(i);
+                Drop(Sessions[i]);
         }
 
         foreach (var info in running)
@@ -496,10 +496,19 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
                 existing.Update(info);
         }
 
+        SyncSessionState();
+    }
+
+    /// <summary>
+    /// Everything that reads off <see cref="Sessions"/> rather than off Docker, so
+    /// a row taken away by hand leaves the same UI as one that exited normally.
+    /// </summary>
+    private void SyncSessionState()
+    {
         foreach (var project in _allProjects)
         {
-            project.IsRunning = running.Any(s =>
-                string.Equals(s.ProjectPath, project.Entry.Path, StringComparison.OrdinalIgnoreCase));
+            project.IsRunning = Sessions.Any(s =>
+                string.Equals(s.Info.ProjectPath, project.Entry.Path, StringComparison.OrdinalIgnoreCase));
         }
 
         OnPropertyChanged(nameof(HasSessions));
@@ -515,12 +524,24 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         _tick++;
 
         if (_tick % 3 == 0)
-            _ = SampleAllAsync();
+            _ = PollAsync();
 
         // Only the selected project shows LAST OPENED, and "X min ago" cannot change
         // faster than once a minute, so anything more often is wasted work.
         if (_tick % 60 == 0)
             SelectedProject?.RefreshElapsed();
+    }
+
+    /// <summary>
+    /// Re-lists before sampling rather than trusting the event stream on its own.
+    /// A daemon restart kills every container while the stream is down, and the
+    /// events for those deaths are never replayed — so without this the strip
+    /// keeps showing sessions that stopped when Docker Desktop did.
+    /// </summary>
+    private async Task PollAsync()
+    {
+        await RefreshSessionsAsync();
+        await SampleAllAsync();
     }
 
     private async Task SampleAllAsync()
@@ -567,7 +588,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
                 }
                 catch (Exception ex)
                 {
-                    StatusText = $"Could not create the Claude home volume: {ex.Message}";
+                    Toasts.ShowError($"Could not create the Claude home volume: {ex.Message}");
                     return;
                 }
             }
@@ -575,9 +596,11 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             if (_imageService is not null && ShowBuildWindowAsync is not null)
             {
                 var approved = SkipUpdateCheck ? null : PendingClaudeVersion;
+                // False covers a cancelled build as well as a failed one. The build
+                // window reported the reason; this says what it cost.
                 if (!await ShowBuildWindowAsync(_imageService, ImageName, ResolveBuildVersion(approved)))
                 {
-                    StatusText = "Build failed — session not started.";
+                    Toasts.ShowError("Session not started — the image build did not complete.");
                     return;
                 }
 
@@ -600,7 +623,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
 
             if (!outcome.Ok)
             {
-                StatusText = outcome.Error;
+                Toasts.ShowError(outcome.Error!);
                 return;
             }
 
@@ -608,10 +631,12 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             ProjectStore.RecordLaunch(project.Entry);
             project.Refresh();
             Save();
-            StatusText = null;
         }
         finally
         {
+            // StatusText only ever narrates a launch in progress; failures leave
+            // by toast, so there is nothing left for it to say either way.
+            StatusText = null;
             IsBusy = false;
         }
     }
@@ -663,7 +688,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         }
         catch (Exception ex)
         {
-            StatusText = $"Could not open the folder: {ex.Message}";
+            Toasts.ShowError($"Could not open the folder: {ex.Message}");
         }
     }
 
@@ -679,7 +704,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
 
         if (!Core.Launching.ProjectPath.TryResolve(picked, out var full, out var error))
         {
-            StatusText = error;
+            Toasts.ShowError(error!);
             return;
         }
 
@@ -726,23 +751,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         Save();
         ApplyFilter();
 
-        _ = ShowToastAsync($"Removed {project.Entry.Name}");
-    }
-
-    /// <summary>
-    /// A later toast supersedes an earlier one's dismissal, which is what the id
-    /// guards. The delay deliberately isn't cancellable: a cancelled Task.Delay
-    /// throws, and the debugger reports that on every replaced toast.
-    /// </summary>
-    private async Task ShowToastAsync(string message)
-    {
-        var id = ++_toastId;
-        ToastText = message;
-
-        await Task.Delay(ToastDurationMs, CancellationToken.None);
-
-        if (_toastId == id)
-            ToastText = null;
+        Toasts.Show($"Removed {project.Entry.Name}");
     }
 
     [RelayCommand]
@@ -829,14 +838,39 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         if (session is null || _sessionService is null)
             return;
 
-        try
+        var outcome = await _sessionService.StopAsync(session.ContainerId);
+
+        if (outcome.AlreadyGone)
         {
-            await _sessionService.StopAsync(session.ContainerId);
+            Drop(session);
+            Toasts.Show($"{session.Name} had already stopped.");
         }
-        catch (Exception ex)
+        else if (!outcome.Ok)
         {
-            StatusText = $"Could not stop the session: {ex.Message}";
+            Toasts.ShowError($"Could not stop {session.Name} — {outcome.Error}");
         }
+
+        // Even a clean stop is confirmed by listing rather than assumed: the die
+        // event is the normal signal, and this covers the case where it is lost.
+        await RefreshSessionsAsync();
+    }
+
+    /// <summary>
+    /// Takes a session off the strip for a container Docker no longer lists. The
+    /// workspace goes with it: the die event that normally disposes it is lost
+    /// whenever the daemon restarts under a running session, and it is never
+    /// replayed. Disposing twice would be the ordinary path, so
+    /// <see cref="_liveSessions"/> is the guard — the die handler removes from it
+    /// first, and this finds nothing left to dispose.
+    /// </summary>
+    private void Drop(SessionItemViewModel session)
+    {
+        Sessions.Remove(session);
+
+        if (_liveSessions.TryRemove(session.Info.SessionId, out var live))
+            live.Dispose();
+
+        SyncSessionState();
     }
 
     [RelayCommand]
@@ -872,6 +906,9 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
 
             _allProjects.Add(new ProjectItemViewModel(entry));
         }
+
+        Toasts.Show("Removed rate-filing-api");
+        Toasts.ShowError("Could not stop claude-container — No such container: 8f2c1a4b9e07");
 
         ApplyFilter();
     }

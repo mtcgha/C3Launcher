@@ -1,0 +1,41 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:C3Launcher.Gui.ViewModels"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="600" d:DesignHeight="140"
+             x:Class="C3Launcher.Gui.Views.ToastOverlay"
+             x:DataType="vm:ToastHost"
+             HorizontalAlignment="Center" VerticalAlignment="Bottom"
+             Margin="24,0,24,22">
+
+  <ItemsControl ItemsSource="{Binding Items}">
+    <ItemsControl.ItemTemplate>
+      <DataTemplate x:DataType="vm:ToastViewModel">
+        <!-- A transient toast is click-through: it covers whatever is beneath it
+             on its way out, and has no control of its own worth reaching. -->
+        <Border Classes="toast" Classes.error="{Binding IsError}"
+                Margin="0,7,0,0" MaxWidth="620" HorizontalAlignment="Center"
+                IsHitTestVisible="{Binding IsError}">
+          <Grid ColumnDefinitions="Auto,*,Auto">
+            <Path Grid.Column="0" Data="{StaticResource IconWarning}" Width="13" Height="13" Stretch="Uniform"
+                  Stroke="{DynamicResource Red}" StrokeThickness="2"
+                  VerticalAlignment="Center" Margin="0,0,10,0"
+                  IsVisible="{Binding IsError}" />
+
+            <TextBlock Grid.Column="1" Text="{Binding Text}" VerticalAlignment="Center"
+                       Foreground="{DynamicResource TextSecondary}" FontSize="12.5" TextWrapping="Wrap" />
+
+            <Button Grid.Column="2" Classes="icon" Margin="12,0,-4,0" VerticalAlignment="Center"
+                    IsVisible="{Binding IsError}"
+                    Command="{Binding $parent[ItemsControl].((vm:ToastHost)DataContext).DismissCommand}"
+                    CommandParameter="{Binding}">
+              <Path Data="{StaticResource IconClose}" Width="10" Height="10" Stretch="Uniform"
+                    Stroke="{DynamicResource TextDim}" StrokeThickness="2" />
+            </Button>
+          </Grid>
+        </Border>
+      </DataTemplate>
+    </ItemsControl.ItemTemplate>
+  </ItemsControl>
+</UserControl>

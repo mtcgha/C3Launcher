@@ -1,15 +1,16 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:C3Launcher.Gui.ViewModels"
+        xmlns:views="using:C3Launcher.Gui.Views"
         xmlns:conv="using:Avalonia.Data.Converters"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        mc:Ignorable="d" d:DesignWidth="900" d:DesignHeight="660"
+        mc:Ignorable="d" d:DesignWidth="900" d:DesignHeight="646"
         x:Class="C3Launcher.Gui.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
         Icon="/Assets/c3launcher.ico"
         Title="C3Launcher"
-        Width="900" Height="660" MinWidth="900" MinHeight="600"
+        Width="900" Height="646" MinWidth="900" MinHeight="586"
         Background="{DynamicResource AppBackground}"
         FontFamily="{DynamicResource UiFont}">
 
@@ -17,7 +18,9 @@
     <vm:MainWindowViewModel />
   </Design.DataContext>
 
-  <Grid RowDefinitions="76,*,Auto">
+  <!-- The header's height is its padding: everything in it is centred, and the
+       tallest thing is the three-line cat at 42px. -->
+  <Grid RowDefinitions="62,*,Auto">
 
     <!-- header strip -->
     <Border Grid.Row="0"
@@ -256,16 +259,9 @@
       </StackPanel>
     </Grid>
 
-    <!-- toast: last child of the body row so it floats over both panes, and outside
-         the right pane so it still shows when nothing is selected -->
-    <Border Grid.Row="1" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,22"
-            Background="{DynamicResource RaisedBackground}"
-            BorderBrush="{DynamicResource BorderStrong}" BorderThickness="1"
-            CornerRadius="6" Padding="16,10" BoxShadow="0 6 20 0 #66000000"
-            IsHitTestVisible="False"
-            IsVisible="{Binding ToastText, Converter={x:Static conv:StringConverters.IsNotNullOrEmpty}}">
-      <TextBlock Text="{Binding ToastText}" Foreground="{DynamicResource TextSecondary}" FontSize="12.5" />
-    </Border>
+    <!-- toasts: last child of the body row so they float over both panes, and
+         outside the right pane so they still show when nothing is selected -->
+    <views:ToastOverlay Grid.Row="1" DataContext="{Binding Toasts}" />
 
     <!-- sessions strip -->
     <Border Grid.Row="2"

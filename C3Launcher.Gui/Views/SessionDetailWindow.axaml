@@ -1,7 +1,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:C3Launcher.Gui.ViewModels"
-        xmlns:conv="using:Avalonia.Data.Converters"
+        xmlns:views="using:C3Launcher.Gui.Views"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d" d:DesignWidth="860" d:DesignHeight="640"
@@ -165,14 +165,24 @@
       </StackPanel>
     </ScrollViewer>
 
+    <views:ToastOverlay Grid.Row="0" DataContext="{Binding Toasts}" />
+
     <Border Grid.Row="1" Background="{DynamicResource PanelBackground}"
             BorderBrush="{DynamicResource BorderNormal}" BorderThickness="0,1,0,0">
       <Grid ColumnDefinitions="*,Auto,Auto" Margin="18,0">
-        <TextBlock Grid.Column="0" Text="{Binding Error}" Foreground="{DynamicResource Red}" FontSize="11.5"
-                   VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
-                   IsVisible="{Binding Error, Converter={x:Static conv:StringConverters.IsNotNullOrEmpty}}" />
+        <Border Grid.Column="0" CornerRadius="4" Padding="9,3" VerticalAlignment="Center" HorizontalAlignment="Left"
+                Background="{DynamicResource AmberWash}" BorderBrush="{DynamicResource AmberEdge}" BorderThickness="1"
+                IsVisible="{Binding !IsRunning}">
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <Path Data="{StaticResource IconWarning}" Width="11" Height="11" Stretch="Uniform"
+                  Stroke="{DynamicResource Amber}" StrokeThickness="2" VerticalAlignment="Center" />
+            <TextBlock Text="Container is gone — the readings above are its last."
+                       FontSize="11" Foreground="{DynamicResource AmberText}" />
+          </StackPanel>
+        </Border>
 
         <Button Grid.Column="1" Classes="danger" Height="30" Margin="0,0,10,0"
+                IsEnabled="{Binding IsRunning}"
                 Command="{Binding StopCommand}">
           <StackPanel Orientation="Horizontal" Spacing="7">
             <Path Data="{StaticResource IconStop}" Width="10" Height="10" Stretch="Uniform"

@@ -66,3 +66,21 @@ the user for whatever you need from it.
 This can include files a build would normally require. Install and build steps
 may fail for that reason, and that is expected rather than something to work
 around.
+
+## Comments
+
+Keep them short, and put them only where the code cannot speak for itself — the
+constraint being satisfied, the failure that motivated an odd-looking line, the
+library or platform behaviour being worked around. A comment that restates what
+the line does is noise, and it has to be maintained alongside the code it
+duplicates. Match the density of the file you are editing; do not arrive and
+annotate everything.
+
+Write them in the present tense, describing how the code works now. Do not frame
+a comment around what changed, what the code used to do, or what was removed:
+the next reader has the current file in front of them, not your diff, and
+"now returns X instead of Y" is stale the first time someone opens it fresh.
+The same goes for commented-out code — delete it; version control already has
+it. Reach for history only when it is the actual point, such as a workaround
+pinned to a specific upstream bug, or a deliberate rejection of the obvious
+approach that someone would otherwise undo.

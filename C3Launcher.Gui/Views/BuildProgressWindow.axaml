@@ -1,7 +1,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:C3Launcher.Gui.ViewModels"
-        xmlns:conv="using:Avalonia.Data.Converters"
+        xmlns:views="using:C3Launcher.Gui.Views"
         xmlns:sys="using:System"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -47,6 +47,8 @@
       </ScrollViewer>
     </Border>
 
+    <views:ToastOverlay Grid.Row="1" DataContext="{Binding Toasts}" />
+
     <Border Grid.Row="2" Background="{DynamicResource PanelBackground}"
             BorderBrush="{DynamicResource BorderNormal}" BorderThickness="0,1,0,0">
       <Grid ColumnDefinitions="Auto,*,Auto" Margin="18,0">
@@ -56,13 +58,7 @@
                  Fill="{DynamicResource Green}" IsVisible="{Binding Succeeded}" />
 
         <TextBlock Grid.Column="1" Text="{Binding FooterNote}" Classes="dim" FontSize="11.5"
-                   Margin="10,0" VerticalAlignment="Center"
-                   IsVisible="{Binding Error, Converter={x:Static conv:ObjectConverters.IsNull}}" />
-
-        <TextBlock Grid.Column="1" Text="{Binding Error}" FontSize="11.5" Margin="10,0"
-                   VerticalAlignment="Center" Foreground="{DynamicResource Red}"
-                   TextTrimming="CharacterEllipsis"
-                   IsVisible="{Binding Error, Converter={x:Static conv:ObjectConverters.IsNotNull}}" />
+                   Margin="10,0" VerticalAlignment="Center" />
 
         <Button Grid.Column="2" Content="Cancel" Click="OnCancel" IsVisible="{Binding IsRunning}" />
         <Button Grid.Column="2" Classes="primary" Content="Close" Height="30" Click="OnClose"

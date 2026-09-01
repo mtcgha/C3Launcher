@@ -59,6 +59,8 @@ public partial class SessionDetailViewModel : ViewModelBase, IDisposable
     public ObservableCollection<MountRowViewModel> Mounts { get; } = [];
     public ObservableCollection<SecurityFlagViewModel> SecurityFlags { get; } = [];
 
+    public ToastHost Toasts { get; } = new();
+
     [ObservableProperty]
     public partial string Uptime { get; set; }
 
@@ -72,7 +74,7 @@ public partial class SessionDetailViewModel : ViewModelBase, IDisposable
     public partial string Network { get; set; } = "—";
 
     [ObservableProperty]
-    public partial string? Error { get; set; }
+    public partial bool IsRunning { get; set; } = true;
 
     [ObservableProperty]
     public partial int HiddenMountCount { get; set; }
@@ -155,7 +157,7 @@ public partial class SessionDetailViewModel : ViewModelBase, IDisposable
         }
         catch (Exception ex)
         {
-            Error = $"Could not inspect the container: {ex.Message}";
+            Toasts.ShowError($"Could not inspect the container: {ex.Message}");
         }
     }
 
@@ -238,14 +240,36 @@ public partial class SessionDetailViewModel : ViewModelBase, IDisposable
     [RelayCommand]
     private async Task StopAsync()
     {
+        StopOutcome outcome;
         try
         {
-            await _service.StopAsync(ContainerId, _cts.Token);
+            outcome = await _service.StopAsync(ContainerId, _cts.Token);
         }
-        catch (Exception ex)
+        catch (OperationCanceledException)
         {
-            Error = $"Could not stop the session: {ex.Message}";
+            return;
         }
+
+        if (outcome.AlreadyGone)
+        {
+            MarkGone();
+            return;
+        }
+
+        if (!outcome.Ok)
+            Toasts.ShowError($"Could not stop the session: {outcome.Error}");
+    }
+
+    /// <summary>
+    /// Docker has no record of this container, so nothing here can be refreshed
+    /// and there is nothing left to stop. Everything on screen is a last reading
+    /// from before it went; the notice says so rather than letting stale tiles
+    /// pass for live ones.
+    /// </summary>
+    private void MarkGone()
+    {
+        _timer.Stop();
+        IsRunning = false;
     }
 
     public void Dispose()
