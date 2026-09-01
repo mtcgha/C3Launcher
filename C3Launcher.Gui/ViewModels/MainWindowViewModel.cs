@@ -1,6 +1,5 @@
 using Avalonia.Controls;
 using Avalonia.Threading;
-using C3Launcher.Core.Auth;
 using C3Launcher.Core.Docker;
 using C3Launcher.Core.Launching;
 using C3Launcher.Core.Mounting;
@@ -98,15 +97,6 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     public IReadOnlyList<PermissionModeChoice> PermissionModeChoices { get; }
 
     [ObservableProperty]
-    public partial string AccountEmail { get; set; } = "not signed in";
-
-    [ObservableProperty]
-    public partial string AccountOrg { get; set; } = string.Empty;
-
-    [ObservableProperty]
-    public partial string? AuthError { get; set; }
-
-    [ObservableProperty]
     public partial string ImageName { get; set; } = ContainerAssets.ImageName;
 
     [ObservableProperty]
@@ -188,8 +178,6 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
 
     public async Task InitializeAsync()
     {
-        ReadAuth();
-
         try
         {
             _docker = DockerConnection.Create(
@@ -239,28 +227,6 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         }
 
         await CheckForUpdatesAsync();
-    }
-
-    private void ReadAuth()
-    {
-        var auth = ClaudeAuthReader.Read();
-        if (!auth.Ok)
-        {
-            AuthError = auth.Error;
-            AccountEmail = "not signed in";
-            AccountOrg = string.Empty;
-            return;
-        }
-
-        AuthError = null;
-        AccountEmail = auth.Auth!.Email;
-        AccountOrg = auth.Auth.OrganizationName ?? DomainOf(auth.Auth.Email);
-    }
-
-    private static string DomainOf(string email)
-    {
-        var at = email.IndexOf('@');
-        return at >= 0 && at < email.Length - 1 ? email[(at + 1)..] : string.Empty;
     }
 
     private void LoadProjects()
@@ -584,17 +550,28 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         if (SelectedProject is not { } project)
             return;
 
-        if (AuthError is not null)
-        {
-            StatusText = AuthError;
-            return;
-        }
-
         IsBusy = true;
         StatusText = "Building image…";
 
         try
         {
+            // Per launch rather than at startup: the compose file declares the
+            // volume external, so compose fails with "external volume not
+            // found" if anything removed it while the app was open. Creating it
+            // is a list plus, at most, one create.
+            if (_docker is { } docker)
+            {
+                try
+                {
+                    await ClaudeHomeVolume.EnsureAsync(docker.Client);
+                }
+                catch (Exception ex)
+                {
+                    StatusText = $"Could not create the Claude home volume: {ex.Message}";
+                    return;
+                }
+            }
+
             if (_imageService is not null && ShowBuildWindowAsync is not null)
             {
                 var approved = SkipUpdateCheck ? null : PendingClaudeVersion;
@@ -873,8 +850,6 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
 
     private void SeedDesignData()
     {
-        AccountEmail = "matthew.wilcox@ldi.la.gov";
-        AccountOrg = "ldi.la.gov";
         ImageVersion = "v2.0.14";
         UpdateText = "up to date";
         MountSummary = "142 items hidden";

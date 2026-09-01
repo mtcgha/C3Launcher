@@ -1,4 +1,3 @@
-using C3Launcher.Core.Auth;
 using C3Launcher.Core.Compose;
 using C3Launcher.Core.Docker;
 using C3Launcher.Core.Mounting;
@@ -29,14 +28,12 @@ public sealed class LaunchedSession : IDisposable
         string projectPath,
         string projectName,
         SessionWorkspace workspace,
-        MountScanResult scan,
-        ClaudeAuth auth)
+        MountScanResult scan)
     {
         ProjectPath = projectPath;
         ProjectName = projectName;
         _workspace = workspace;
         Scan = scan;
-        Auth = auth;
     }
 
     public string SessionId => _workspace.SessionId;
@@ -44,7 +41,6 @@ public sealed class LaunchedSession : IDisposable
     public string ProjectPath { get; }
     public string ProjectName { get; }
     public MountScanResult Scan { get; }
-    public ClaudeAuth Auth { get; }
 
     public void Dispose() => _workspace.Dispose();
 }
@@ -98,10 +94,8 @@ public sealed class SessionLauncher
         if (!ProjectPath.TryResolve(options.ProjectPath, out var root, out var pathError))
             return LaunchOutcome.Failed(pathError!);
 
-        var auth = ClaudeAuthReader.Read();
-        if (!auth.Ok)
-            return LaunchOutcome.Failed(auth.Error!);
-
+        // No auth preflight: the session's login lives in the Claude home
+        // volume, and a session that is not signed in prompts for /login itself.
         var patterns = MountIgnorePattern.ParseFile(options.MountIgnorePath ?? ContainerAssets.DefaultMountIgnorePath);
 
         var scan = await Task.Run(
@@ -120,7 +114,7 @@ public sealed class SessionLauncher
             var spec = ComposePlanner.Build(new ComposePlanRequest
             {
                 ProjectRoot = root,
-                Auth = auth.Auth!,
+                ProjectName = projectName,
                 Image = options.Image,
                 Scan = scan,
                 Workspace = workspace,
@@ -134,7 +128,7 @@ public sealed class SessionLauncher
             ComposeWriter.WriteTo(spec, workspace.ComposeFilePath);
 
             return new LaunchOutcome(
-                new LaunchedSession(root, projectName, workspace, scan, auth.Auth!),
+                new LaunchedSession(root, projectName, workspace, scan),
                 null);
         }
         catch

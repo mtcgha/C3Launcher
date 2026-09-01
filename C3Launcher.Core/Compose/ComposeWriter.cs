@@ -16,6 +16,10 @@ public static class ComposeWriter
         yaml.AppendLine("services:");
         yaml.AppendLine($"  {spec.ServiceName}:");
         yaml.AppendLine($"    image: {Quote(spec.Image)}");
+
+        if (!string.IsNullOrEmpty(spec.WorkingDirectory))
+            yaml.AppendLine($"    working_dir: {Quote(spec.WorkingDirectory)}");
+
         yaml.AppendLine($"    stdin_open: {Bool(spec.StdinOpen)}");
         yaml.AppendLine($"    tty: {Bool(spec.Tty)}");
         yaml.AppendLine($"    read_only: {Bool(spec.ReadOnlyRootFilesystem)}");
@@ -27,13 +31,28 @@ public static class ComposeWriter
                 yaml.AppendLine($"      {Quote(key)}: {Quote(value)}");
         }
 
+        if (spec.Environment.Count > 0)
+        {
+            yaml.AppendLine("    environment:");
+            foreach (var (key, value) in spec.Environment)
+                yaml.AppendLine($"      {Quote(key)}: {Quote(value)}");
+        }
+
         AppendScalarList(yaml, "cap_drop", spec.CapDrop);
         AppendScalarList(yaml, "security_opt", spec.SecurityOpt);
         AppendScalarList(yaml, "tmpfs", spec.Tmpfs);
 
-        if (spec.Volumes.Count > 0)
+        if (spec.Volumes.Count > 0 || spec.NamedVolumes.Count > 0)
         {
             yaml.AppendLine("    volumes:");
+
+            foreach (var volume in spec.NamedVolumes)
+            {
+                yaml.AppendLine("      - type: volume");
+                yaml.AppendLine($"        source: {Quote(volume.Name)}");
+                yaml.AppendLine($"        target: {Quote(volume.Target)}");
+            }
+
             foreach (var volume in spec.Volumes)
             {
                 yaml.AppendLine("      - type: bind");
@@ -57,6 +76,18 @@ public static class ComposeWriter
                 yaml.AppendLine("    labels:");
                 foreach (var (key, value) in network.Labels)
                     yaml.AppendLine($"      {Quote(key)}: {Quote(value)}");
+            }
+        }
+
+        // external: true means compose attaches to a volume C3Launcher created
+        // and never creates or removes one itself.
+        if (spec.NamedVolumes.Count > 0)
+        {
+            yaml.AppendLine("volumes:");
+            foreach (var name in spec.NamedVolumes.Select(volume => volume.Name).Distinct())
+            {
+                yaml.AppendLine($"  {Quote(name)}:");
+                yaml.AppendLine("    external: true");
             }
         }
 

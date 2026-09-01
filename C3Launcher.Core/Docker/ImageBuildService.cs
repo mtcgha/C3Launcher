@@ -9,11 +9,16 @@ public sealed record BuildOutcome(bool Ok, string? Error);
 
 public sealed class ImageBuildService
 {
+    /// <summary>
+    /// Every file the Dockerfile COPYs. The build context is assembled from this
+    /// list, so a COPY of anything missing here fails the build.
+    /// </summary>
     private static readonly string[] BuildContextFiles =
     [
         "Dockerfile",
         "entrypoint.sh",
         "container-CLAUDE.md",
+        "managed-settings.json",
     ];
 
     private readonly IDockerClient _client;

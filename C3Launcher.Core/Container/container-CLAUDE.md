@@ -20,20 +20,33 @@ image. If a task requires one, say so directly rather than searching the
 filesystem for it. .NET Framework specifically cannot run on Linux at all, so
 Framework projects can be read and edited here but never built or run.
 
+The user set this image up and already knows what is in it. Do not remind them
+that you cannot build or run the project, and do not append it as a caveat when
+handing back work — write the code and stop. Mention a missing toolchain only
+when it actually changes what they should do next, and then once.
+
 ## Filesystem
 
-- **`/workspace` is the only writable, persistent location.** It is a bind
-  mount of the user's real project directory on the host — changes here are
-  changes to their actual files.
+- **The working directory is the user's project.** It is a bind mount of their
+  real project directory on the host — changes here are changes to their actual
+  files, and it is the only place project work belongs. It sits in a
+  per-project directory under `/workspace`; use the working directory rather
+  than assuming `/workspace` itself is the project.
 - **The root filesystem is read-only.** `apt-get install`, `npm install -g`,
   and any other system-level install will fail. Do not attempt them; ask the
   user to add the package to the container image instead.
-- **`/home/node` is a 512 MB tmpfs**, discarded when the session ends. Usable
-  for caches, but nothing written there survives.
+- **`/home/node` persists and is shared with the user's other Claude Code
+  sessions.** It holds Claude Code's own configuration, credentials and
+  history. Caches are fine there; project files are not, and anything written
+  there is visible to their other sessions.
 - **`/tmp` is 256 MB and mounted `noexec`.** Native code cannot be executed or
   loaded from it. Never create a Python venv in `/tmp`: pure-Python imports
   work, but any native wheel (numpy, pandas, cryptography) fails with a
-  misleading error. Create venvs at `/workspace/.venv`.
+  misleading error. Create venvs inside the project, such as `.venv` in the
+  working directory. `/workspace` itself is on the read-only root filesystem —
+  only the project directory under it is writable. The project is a bind mount
+  of the user's real directory, so delete the venv when you are finished with
+  it rather than leaving it in their working tree.
 
 ## Python
 

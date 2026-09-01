@@ -148,9 +148,9 @@
                       <Grid ColumnDefinitions="*,168,44" Height="28" Margin="12,0">
                         <TextBlock Grid.Column="0" Text="{Binding Source}" Classes="mono" FontSize="11.5"
                                    Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center"
-                                   TextTrimming="CharacterEllipsis" />
+                                   TextTrimming="PathSegmentEllipsis" />
                         <TextBlock Grid.Column="1" Text="{Binding Target}" Classes="mono dim" FontSize="11.5"
-                                   VerticalAlignment="Center" />
+                                   VerticalAlignment="Center" TextTrimming="PathSegmentEllipsis" />
                         <TextBlock Grid.Column="2" Text="{Binding Mode}" Classes="mono" FontSize="11"
                                    VerticalAlignment="Center"
                                    Foreground="{DynamicResource TextFaint}" />

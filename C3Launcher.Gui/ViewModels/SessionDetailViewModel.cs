@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using Avalonia.Threading;
+using C3Launcher.Core.Compose;
 using C3Launcher.Core.Docker;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -99,7 +100,7 @@ public partial class SessionDetailViewModel : ViewModelBase, IDisposable
             foreach (var mount in inspect.Mounts ?? [])
             {
                 // The stub mounts are noise here — they all share one temp source.
-                if (mount.Destination.StartsWith("/workspace/", StringComparison.Ordinal))
+                if (IsStubMount(mount.Destination))
                 {
                     hidden++;
                     continue;
@@ -156,6 +157,18 @@ public partial class SessionDetailViewModel : ViewModelBase, IDisposable
         {
             Error = $"Could not inspect the container: {ex.Message}";
         }
+    }
+
+    /// <summary>
+    /// The project is mounted at /workspace/&lt;project&gt;, so a destination one
+    /// level deeper than that is a stub shadowing something inside it.
+    /// </summary>
+    private static bool IsStubMount(string destination)
+    {
+        var prefix = ComposePlanner.WorkspaceRoot + "/";
+
+        return destination.StartsWith(prefix, StringComparison.Ordinal)
+            && destination.IndexOf('/', prefix.Length) >= 0;
     }
 
     private async Task PollAsync()

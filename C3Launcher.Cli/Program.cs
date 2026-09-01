@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using C3Launcher.Core.Auth;
 using C3Launcher.Core.Docker;
 using C3Launcher.Core.Launching;
 
@@ -22,11 +21,6 @@ internal static class Program
         if (!ProjectPath.TryResolve(args.ProjectPath ?? ".", out var root, out var pathError))
             return Fail(pathError!);
 
-        var auth = ClaudeAuthReader.Read();
-        if (!auth.Ok)
-            return Fail(auth.Error!);
-
-        Row("Account", auth.Auth!.Email, auth.Auth.OrganizationName);
         Row("Workspace", root);
 
         using var docker = DockerConnection.Create();
@@ -57,6 +51,17 @@ internal static class Program
 
                 Row("Build", "failed — falling back to the existing image");
             }
+        }
+
+        // The compose file declares the Claude home volume external, so it has
+        // to exist before the session starts.
+        try
+        {
+            await ClaudeHomeVolume.EnsureAsync(docker.Client);
+        }
+        catch (Exception ex)
+        {
+            return Fail($"Could not create the Claude home volume: {ex.Message}");
         }
 
         var launcher = new SessionLauncher();

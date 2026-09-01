@@ -94,7 +94,7 @@
             BorderBrush="{DynamicResource BorderNormal}" BorderThickness="0,1,0,0">
       <Grid ColumnDefinitions="*,Auto,Auto" Margin="18,0">
         <TextBlock Grid.Column="0" Text="{Binding MountIgnorePath}" Classes="mono faint" FontSize="11"
-                   VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                   VerticalAlignment="Center" TextTrimming="PathSegmentEllipsis" />
         <Button Grid.Column="1" Content="Edit patterns…" Margin="0,0,10,0" Click="OnEditPatterns" />
         <Button Grid.Column="2" Classes="primary" Content="Close" Height="30" Click="OnClose" />
       </Grid>

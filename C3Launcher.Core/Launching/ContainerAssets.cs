@@ -15,6 +15,8 @@ public static class ContainerAssets
 
     public static string ManagedPolicyPath => Path.Combine(BuildContextPath, "container-CLAUDE.md");
 
+    public static string ManagedSettingsPath => Path.Combine(BuildContextPath, "managed-settings.json");
+
     public static string DefaultMountIgnorePath => Path.Combine(BuildContextPath, ".mountignore");
 
     public static bool IsPresent => File.Exists(DockerfilePath) && File.Exists(EntrypointPath);
