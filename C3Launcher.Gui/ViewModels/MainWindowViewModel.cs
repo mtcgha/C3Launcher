@@ -736,7 +736,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
 
         if (ConfirmAsync is not null && !await ConfirmAsync(new ConfirmRequest(
             $"Remove {project.Entry.Name}?",
-            "Drops the project from this list, along with its model choice and extra arguments.",
+            "Drops the project from this list, along with its saved settings. The project itself is untouched.",
             "Remove",
             project.IsRunning
                 ? "A session is running for this project. It keeps running, and still shows "
