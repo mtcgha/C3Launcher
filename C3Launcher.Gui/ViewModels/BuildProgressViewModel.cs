@@ -46,8 +46,6 @@ public partial class BuildProgressViewModel : ViewModelBase
     [ObservableProperty]
     public partial bool Succeeded { get; set; }
 
-    public string FooterNote => "Only the last layer rebuilds — everything above it is cached";
-
     public event Action<bool>? Finished;
 
     public async Task RunAsync()

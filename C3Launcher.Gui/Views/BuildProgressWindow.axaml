@@ -57,9 +57,6 @@
         <Ellipse Grid.Column="0" Width="7" Height="7" VerticalAlignment="Center"
                  Fill="{DynamicResource Green}" IsVisible="{Binding Succeeded}" />
 
-        <TextBlock Grid.Column="1" Text="{Binding FooterNote}" Classes="dim" FontSize="11.5"
-                   Margin="10,0" VerticalAlignment="Center" />
-
         <Button Grid.Column="2" Content="Cancel" Click="OnCancel" IsVisible="{Binding IsRunning}" />
         <Button Grid.Column="2" Classes="primary" Content="Close" Height="30" Click="OnClose"
                 IsVisible="{Binding !IsRunning}" />
