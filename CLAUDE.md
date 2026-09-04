@@ -210,13 +210,6 @@ read as success.
 
 ## Conventions
 
-Comments explain **why**, not what — the constraint, the failure that motivated
-the code, or the non-obvious daemon behaviour being worked around. Match that;
-do not narrate the code.
-
-Do not write comments in terms of what changed, what something used to do, or
-what was removed. Describe how it works now.
-
 File-scoped namespaces, `sealed` by default, records for data, collection
 expressions, and `Try*(out …)` for expected failure. Errors that a user should
 see come back as a result record with a message (`LaunchOutcome`,

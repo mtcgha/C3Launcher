@@ -69,12 +69,19 @@ around.
 
 ## Comments
 
-Keep them short, and put them only where the code cannot speak for itself — the
-constraint being satisfied, the failure that motivated an odd-looking line, the
-library or platform behaviour being worked around. A comment that restates what
-the line does is noise, and it has to be maintained alongside the code it
-duplicates. Match the density of the file you are editing; do not arrive and
-annotate everything.
+The default is none. A comment is what you write when you could not make the
+code say it — not a finishing step, and not evidence that you thought about the
+line.
+
+So the burden is on the comment. It has to carry something the file does not: a
+constraint from outside it, the failure that motivated an odd-looking line, the
+library or platform behaviour being worked around. Those are the narrow cases,
+not a menu to match a comment against, and "it explains why" does not clear the
+bar on its own — a reason the next reader would reach unaided is still noise,
+and it has to be maintained alongside the code it duplicates. If you cannot say
+what a comment tells someone who has already read the lines around it, delete
+it. Match the density of the file you are editing; do not arrive and annotate
+everything.
 
 Write them in the present tense, describing how the code works now. Do not frame
 a comment around what changed, what the code used to do, or what was removed:
