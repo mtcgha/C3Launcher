@@ -41,6 +41,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     private int _tick;
     private string? _installedClaudeVersion;
     private bool _suppressOptionWrites;
+    private bool _suppressSelectionEffects;
 
     public MainWindowViewModel()
     {
@@ -245,6 +246,12 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         var filter = FilterText.Trim();
         var previous = SelectedProject;
 
+        // Refilling the list makes the ListBox push null back through the two-way
+        // SelectedItem binding, so restoring the selection below looks like two
+        // selection changes even when it lands on the project it started on. Left to
+        // run, that rescans the same project's mounts on every filter keystroke.
+        _suppressSelectionEffects = true;
+
         Projects.Clear();
 
         foreach (var project in _allProjects
@@ -260,6 +267,11 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             SelectedProject = previous;
         else
             SelectedProject = Projects.FirstOrDefault();
+
+        _suppressSelectionEffects = false;
+
+        if (!ReferenceEquals(SelectedProject, previous))
+            ApplySelection(SelectedProject);
     }
 
     partial void OnFilterTextChanged(string value) => ApplyFilter();
@@ -276,6 +288,14 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     }
 
     partial void OnSelectedProjectChanged(ProjectItemViewModel? value)
+    {
+        if (_suppressSelectionEffects)
+            return;
+
+        ApplySelection(value);
+    }
+
+    private void ApplySelection(ProjectItemViewModel? value)
     {
         OnPropertyChanged(nameof(HasSelection));
 

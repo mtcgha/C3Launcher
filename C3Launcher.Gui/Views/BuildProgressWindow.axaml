@@ -54,8 +54,6 @@
       <Grid ColumnDefinitions="Auto,*,Auto" Margin="18,0">
         <Ellipse Grid.Column="0" Width="7" Height="7" VerticalAlignment="Center"
                  Fill="{DynamicResource Accent}" IsVisible="{Binding IsRunning}" />
-        <Ellipse Grid.Column="0" Width="7" Height="7" VerticalAlignment="Center"
-                 Fill="{DynamicResource Green}" IsVisible="{Binding Succeeded}" />
 
         <Button Grid.Column="2" Content="Cancel" Click="OnCancel" IsVisible="{Binding IsRunning}" />
         <Button Grid.Column="2" Classes="primary" Content="Close" Height="30" Click="OnClose"
