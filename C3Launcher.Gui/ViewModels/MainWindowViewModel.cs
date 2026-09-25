@@ -722,7 +722,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         if (picked is null)
             return;
 
-        if (!Core.Launching.ProjectPath.TryResolve(picked, out var full, out var error))
+        if (!ProjectPath.TryResolve(picked, out var full, out var error))
         {
             Toasts.ShowError(error!);
             return;
