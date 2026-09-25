@@ -205,8 +205,10 @@ for anything that is one, and a host is a piece of a screen rather than a screen
 What is left in the other slots is state, not notification: `StatusText` narrates
 a launch in progress and is cleared in a `finally`, `MountSummary` says
 `scan failed` with the reason in the toast, and the update pill says
-`update check failed` — it is the green-tick pill, so an error string in it would
-read as success.
+`update check failed` or `Docker unavailable` with the reason in the toast. The
+pill has three forms — green tick, accent arrow for an available version, and a
+red warning when `UpdateFailed` — so a failure never reads as success in the one
+slot that is a tick by default.
 
 ## Conventions
 

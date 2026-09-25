@@ -110,6 +110,9 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     public partial bool UpdateAvailable { get; set; }
 
     [ObservableProperty]
+    public partial bool UpdateFailed { get; set; }
+
+    [ObservableProperty]
     public partial string? PendingClaudeVersion { get; set; }
 
     [ObservableProperty]
@@ -144,6 +147,8 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
 
     [ObservableProperty]
     public partial bool SkipUpdateCheck { get; set; }
+
+    public bool UpdateOk => !UpdateAvailable && !UpdateFailed;
 
     public bool HasSelection => SelectedProject is not null;
 
@@ -182,6 +187,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         {
             Toasts.ShowError($"Could not create a Docker client: {ex.Message}");
             UpdateText = "Docker unavailable";
+            UpdateFailed = true;
             return;
         }
 
@@ -189,6 +195,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         {
             Toasts.ShowError(probeError);
             UpdateText = "Docker unavailable";
+            UpdateFailed = true;
             return;
         }
 
@@ -277,6 +284,10 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     partial void OnFilterTextChanged(string value) => ApplyFilter();
 
     partial void OnBuildCriticalCountChanged(int value) => OnPropertyChanged(nameof(HasBuildCritical));
+
+    partial void OnUpdateAvailableChanged(bool value) => OnPropertyChanged(nameof(UpdateOk));
+
+    partial void OnUpdateFailedChanged(bool value) => OnPropertyChanged(nameof(UpdateOk));
 
     partial void OnSessionsExpandedChanged(bool value)
     {
@@ -401,6 +412,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             return;
 
         var soak = TimeSpan.FromDays(_settings.UpdateSoakDays);
+        UpdateFailed = false;
 
         if (!await _imageService.ImageExistsAsync(ImageName))
         {
@@ -435,10 +447,11 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
 
         if (status.Error is { } error)
         {
-            // The pill it lands in is the "up to date" one, green tick and all, so
-            // the reason goes to a toast and the pill says only that it did not run.
+            // The pill is one line wide, so it says only that the check did not run
+            // and the reason goes to a toast.
             UpdateText = "update check failed";
             UpdateAvailable = false;
+            UpdateFailed = true;
             Toasts.ShowError($"Could not check for Claude Code updates: {error}");
             return;
         }

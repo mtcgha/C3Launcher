@@ -47,11 +47,21 @@
 
             <Border CornerRadius="10" Padding="8,2" VerticalAlignment="Center"
                     Background="{DynamicResource GreenWash}" BorderBrush="{DynamicResource GreenEdge}" BorderThickness="1"
-                    IsVisible="{Binding !UpdateAvailable}">
+                    IsVisible="{Binding UpdateOk}">
               <StackPanel Orientation="Horizontal" Spacing="5">
                 <Path Data="{StaticResource IconCheck}" Width="10" Height="10" Stretch="Uniform"
                       Stroke="{DynamicResource Green}" StrokeThickness="3" VerticalAlignment="Center" />
                 <TextBlock Text="{Binding UpdateText}" FontSize="10" Foreground="{DynamicResource Green}" />
+              </StackPanel>
+            </Border>
+
+            <Border CornerRadius="10" Padding="8,2" VerticalAlignment="Center"
+                    Background="{DynamicResource RedWash}" BorderBrush="{DynamicResource RedEdge}" BorderThickness="1"
+                    IsVisible="{Binding UpdateFailed}">
+              <StackPanel Orientation="Horizontal" Spacing="5">
+                <Path Data="{StaticResource IconWarning}" Width="10" Height="10" Stretch="Uniform"
+                      Stroke="{DynamicResource Red}" StrokeThickness="2" VerticalAlignment="Center" />
+                <TextBlock Text="{Binding UpdateText}" FontSize="10" Foreground="{DynamicResource Red}" />
               </StackPanel>
             </Border>
 
