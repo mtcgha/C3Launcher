@@ -6,6 +6,8 @@ I use it daily for running Claude Code on my own projects. A session has access 
 
 It also keeps my projects in one place: a filterable list, a marker on the ones with a session running, and a strip showing each live session's uptime, CPU, and memory.
 
+![C3Launcher main window](docs/screenshot.png)
+
 ## Prerequisites
 
 - Windows 10/11
