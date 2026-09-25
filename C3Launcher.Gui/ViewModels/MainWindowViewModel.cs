@@ -101,7 +101,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     public partial string ImageName { get; set; } = ContainerAssets.ImageName;
 
     [ObservableProperty]
-    public partial string ImageVersion { get; set; } = "—";
+    public partial string InstalledClaudeVersionText { get; set; } = "—";
 
     [ObservableProperty]
     public partial string UpdateText { get; set; } = "checking…";
@@ -404,7 +404,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
 
         if (!await _imageService.ImageExistsAsync(ImageName))
         {
-            ImageVersion = "not built";
+            InstalledClaudeVersionText = "—";
             _installedClaudeVersion = null;
 
             // Resolve a version even with no image, so the first build installs a
@@ -421,7 +421,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         if (!_settings.CheckForUpdates)
         {
             _installedClaudeVersion = await _updateService.GetInstalledVersionAsync(ImageName);
-            ImageVersion = _installedClaudeVersion is { } v ? $"v{v}" : "—";
+            InstalledClaudeVersionText = _installedClaudeVersion is { } v ? $"v{v}" : "—";
             UpdateText = "update check disabled";
             return;
         }
@@ -431,7 +431,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         var status = await _updateService.CheckAsync(ImageName, soak);
 
         _installedClaudeVersion = status.InstalledVersion;
-        ImageVersion = status.InstalledVersion is { } installed ? $"v{installed}" : "—";
+        InstalledClaudeVersionText = status.InstalledVersion is { } installed ? $"v{installed}" : "—";
 
         if (status.Error is { } error)
         {
@@ -904,7 +904,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
 
     private void SeedDesignData()
     {
-        ImageVersion = "v2.0.14";
+        InstalledClaudeVersionText = "v2.0.14";
         UpdateText = "up to date";
         MountSummary = "142 items hidden";
         BuildCriticalCount = 3;

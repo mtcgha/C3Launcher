@@ -26,7 +26,7 @@
     <Border Grid.Row="0"
             Background="{DynamicResource PanelBackground}"
             BorderBrush="{DynamicResource BorderNormal}" BorderThickness="0,0,0,1">
-      <Grid ColumnDefinitions="Auto,Auto,*,Auto" RowDefinitions="Auto,Auto"
+      <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto" RowDefinitions="Auto,Auto"
             VerticalAlignment="Center" Margin="16,0">
 
         <TextBlock Grid.Row="0" Grid.RowSpan="2" Grid.Column="0" Classes="mono" VerticalAlignment="Center"
@@ -34,13 +34,16 @@
                    Text="   /\_/\&#x0a;  ( ^.^ )&#x0a;   &gt; ~ &lt;" />
 
         <TextBlock Grid.Row="0" Grid.Column="1" Text="IMAGE" Classes="label" Margin="28,0,0,3" />
-        <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal" Spacing="8"
-                    VerticalAlignment="Center" Margin="28,0,0,0">
-            <TextBlock VerticalAlignment="Center">
-              <Run Text="{Binding ImageName}" FontSize="13" />
-              <Run Text="  " />
-              <Run Text="{Binding ImageVersion}" FontSize="11" Foreground="{DynamicResource TextDim}" />
-            </TextBlock>
+        <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding ImageName}" FontSize="13"
+                   VerticalAlignment="Center" Margin="28,0,0,0" />
+
+        <Border Grid.Row="0" Grid.RowSpan="2" Grid.Column="2" Width="1" Margin="16,2,16,2"
+                Background="{DynamicResource BorderNormal}" />
+
+        <TextBlock Grid.Row="0" Grid.Column="3" Text="CLAUDE CODE" Classes="label" Margin="0,0,0,3" />
+        <StackPanel Grid.Row="1" Grid.Column="3" Orientation="Horizontal" Spacing="8"
+                    VerticalAlignment="Center">
+            <TextBlock Text="{Binding InstalledClaudeVersionText}" FontSize="13" VerticalAlignment="Center" />
 
             <Border CornerRadius="10" Padding="8,2" VerticalAlignment="Center"
                     Background="{DynamicResource GreenWash}" BorderBrush="{DynamicResource GreenEdge}" BorderThickness="1"
@@ -63,7 +66,7 @@
             </Border>
         </StackPanel>
 
-        <Button Grid.Row="0" Grid.RowSpan="2" Grid.Column="3" VerticalAlignment="Center"
+        <Button Grid.Row="0" Grid.RowSpan="2" Grid.Column="4" VerticalAlignment="Center"
                 Command="{Binding RebuildCommand}"
                 Classes.primary="{Binding UpdateAvailable}">
           <StackPanel Orientation="Horizontal" Spacing="7">
